@@ -347,12 +347,12 @@ class Anilist {
 // ***** LOCAL TESTING
 
 // (async() => {
-//     const results = await searchResults('Erased');
+//     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
 //     console.log("HREF:", href);
 
 //     const episodes = await extractEpisodes(href);
-//     const firstEpisodeHref = JSON.parse(episodes)[1].href;
+//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
 //     console.log("EPISODE HREF:", firstEpisodeHref);
 
 //     const streamUrl = await extractStreamUrl(firstEpisodeHref);
@@ -639,6 +639,7 @@ async function extractStreamUrl(url) {
             'zaza.',
         ];
 
+
         function getCdnPriority(url) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
                 if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
@@ -732,9 +733,10 @@ async function extractStreamUrl(url) {
         // Pick the single best CDN subtitle URL across all streams
         const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
 
-        // Assign the global best subtitle to any stream that has no subtitleUrl
+        // Assign the global best subtitle to any stream that has no subtitleUrl (!stream.subtitleUrl && bestSubtitleUrl)
+        // Always uses best CDN subtitle, overriding any stream-specific one
         for (const stream of streams) {
-            if (!stream.subtitleUrl && bestSubtitleUrl) {
+            if (bestSubtitleUrl) {
                 stream.subtitleUrl = bestSubtitleUrl;
             }
         }
