@@ -636,6 +636,23 @@ async function extractStreamUrl(url) {
 
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
 
+        // CDN preference: prefer URLs containing these hostnames (in priority order)
+        const CDN_PREFERRED_HOSTS = [
+            'cdn.',          // any other cdn. subdomain
+            'lostproject.club',
+        ];
+
+        function getCdnPriority(url) {
+            for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
+                if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
+            }
+            return CDN_PREFERRED_HOSTS.length; // lowest priority
+        }
+
+        function sortTracksByCdn(tracks) {
+            return [...tracks].sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
+        }
+
         // 1. Fetch available servers
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
@@ -675,14 +692,20 @@ async function extractStreamUrl(url) {
             const streamUrl = source.url;
             const headers = sourcesData.headers || {};
 
-            // Extract tracks/subtitles from the sources response
-            const tracks = (sourcesData.tracks || []).map(t => ({
+            // Extract tracks and sort so CDN URLs come first
+            const rawTracks = (sourcesData.tracks || []).map(t => ({
                 url: t.url,
                 lang: t.lang || t.language || 'english',
                 label: t.label || t.lang || 'English',
                 kind: t.kind || 'captions',
                 default: t.default || false
             }));
+
+            const tracks = sortTracksByCdn(rawTracks);
+
+            if (tracks.length > 0) {
+                console.log("[extractStreamUrl] Best subtitle for " + providerId + ": " + tracks[0].url);
+            }
 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
@@ -718,11 +741,18 @@ async function extractStreamUrl(url) {
             }
         }
 
-        console.log("[extractStreamUrl] Total streams found: " + streams.length);
-        console.log("[extractStreamUrl] Total subtitles found: " + allSubtitles.length);
+        // Final global subtitles list also sorted by CDN preference
+        const sortedSubtitles = sortTracksByCdn(allSubtitles);
 
-        const result = JSON.stringify({ streams, subtitles: allSubtitles });
+        console.log("[extractStreamUrl] Total streams found: " + streams.length);
+        console.log("[extractStreamUrl] Total subtitles found: " + sortedSubtitles.length);
+        if (sortedSubtitles.length > 0) {
+            console.log("[extractStreamUrl] Top subtitle: " + sortedSubtitles[0].url);
+        }
+
+        const result = JSON.stringify({ streams, subtitles: sortedSubtitles });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
+        console.log(result);
         return result;
 
     } catch (error) {
@@ -730,7 +760,6 @@ async function extractStreamUrl(url) {
         return JSON.stringify({ streams: [], subtitles: [] });
     }
 }
-
 
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
