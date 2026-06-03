@@ -346,10 +346,8 @@ class Anilist {
 
 // ***** LOCAL TESTING
 
-// 3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
-// curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
-
-
+//3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
+//curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 // (async() => {
 //     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
@@ -637,6 +635,31 @@ function slugify(title) {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-");
 }
+// ─── CDN rewrite ───────────────────────────────────────────────────────────
+// Rewrites tools.fast4speed.rsvp/media6/... → mp4.24stream.xyz/storage/media6/...
+// Any other non-preferred host is also rewritten.
+ 
+function rewriteMochiCdn(url) {
+    try {
+        console.log("[rewriteMochiCdn] called with: " + url);
+        
+        // Pure string replace — no URL parsing
+        if (url.includes("tools.fast4speed.rsvp/media6/")) {
+            const result = url.replace(
+                "tools.fast4speed.rsvp/media6/",
+                "mp4.24stream.xyz/storage/media6/"
+            );
+            console.log("[rewriteMochiCdn] rewritten to: " + result);
+            return result;
+        }
+
+        console.log("[rewriteMochiCdn] no rewrite needed");
+        return url;
+    } catch (e) {
+        console.log("[rewriteMochiCdn] error: " + e);
+        return url;
+    }
+}
 
 // ─── Extract Stream URL (NEW, uses rate‑limited animexFetch) ───
 async function extractStreamUrl(url) {
@@ -705,39 +728,12 @@ async function extractStreamUrl(url) {
  
             const source = sourcesData.sources[0];
             const headers = sourcesData.headers || {};
-
-            // ─── CDN rewrite ───────────────────────────────────────────────────────────
-            // Rewrites tools.fast4speed.rsvp/media6/... → mp4.24stream.xyz/storage/media6/...
-            // Any other non-preferred host is also rewritten.
-            
-            function rewriteMochiCdn(url) {
-                try {
-                    console.log("[rewriteMochiCdn] called with: " + url);
-                    
-                    // Pure string replace — no URL parsing
-                    if (url.includes("tools.fast4speed.rsvp/media6/")) {
-                        const result = url.replace(
-                            "tools.fast4speed.rsvp/media6/",
-                            "mp4.24stream.xyz/storage/media6/"
-                        );
-                        console.log("[rewriteMochiCdn] rewritten to: " + result);
-                        return result;
-                    }
-
-                    console.log("[rewriteMochiCdn] no rewrite needed");
-                    return url;
-                } catch (e) {
-                    console.log("[rewriteMochiCdn] error: " + e);
-                    return url;
-                }
-            }
-
+ 
             // Rewrite CDN host for direct MP4 streams (not HLS)
             const rawUrl = source.url;
 
             const isMochi = providerId.toLowerCase() === "mochi";
             const streamUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
-            console.log("[extractStreamUrl] Final streamUrl for " + providerId + ": " + streamUrl); // ADD THIS
 
             if (streamUrl !== rawUrl) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + streamUrl);
