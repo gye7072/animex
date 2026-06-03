@@ -386,15 +386,15 @@ class Anilist {
 //     }
 // })();
 
-// // ***** LOCAL TESTING
+// ***** LOCAL TESTING
 
-// function sleep(ms) {
-//     return new Promise((resolve) => setTimeout(resolve, ms));
-// }
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-// async function animexFetch(url, options = {}) {
-//     return soraFetch(url, options);
-// }
+async function animexFetch(url, options = {}) {
+    return soraFetch(url, options);
+}
 
 // // ─── Rate‑limiter for all animex.one requests ───
 // let lastAnimexRequest = 0;
