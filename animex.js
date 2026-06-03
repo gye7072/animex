@@ -636,7 +636,6 @@ async function extractStreamUrl(url) {
         // CDN preference: prefer URLs containing these hostnames (in priority order)
         const CDN_PREFERRED_HOSTS = [
             'cdn.',
-            'lostproject.club',
         ];
 
         function getCdnPriority(url) {
