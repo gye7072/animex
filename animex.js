@@ -346,59 +346,59 @@ class Anilist {
 
 // ***** LOCAL TESTING
 
-// (async() => {
-//     const results = await searchResults('Erased');
-//     const href = JSON.parse(results)[0].href;
-//     console.log("HREF:", href);
+(async() => {
+    const results = await searchResults('Erased');
+    const href = JSON.parse(results)[0].href;
+    console.log("HREF:", href);
     
-//     const episodes = await extractEpisodes(href);
-//     const firstEpisodeHref = JSON.parse(episodes)[0].href;
-//     console.log("EPISODE HREF:", firstEpisodeHref);
+    const episodes = await extractEpisodes(href);
+    const firstEpisodeHref = JSON.parse(episodes)[0].href;
+    console.log("EPISODE HREF:", firstEpisodeHref);
     
-//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
-//     const parsed = JSON.parse(streamUrl);
-//     const streams = parsed.streams;
-//     const subtitles = parsed.subtitles;
+    const streamUrl = await extractStreamUrl(firstEpisodeHref);
+    const parsed = JSON.parse(streamUrl);
+    const streams = parsed.streams;
+    const subtitles = parsed.subtitles;
 
-//     //const yukiStream = streams.find(s => s.title.includes('YUKI') && s.title.includes('SUB'));
-//     //const subTrack = parsed.subtitles?.[0];
+    //const yukiStream = streams.find(s => s.title.includes('YUKI') && s.title.includes('SUB'));
+    //const subTrack = parsed.subtitles?.[0];
 
-//     //subtitles embedded
+    //subtitles embedded
 
-//     //video 
-//         //python -m yt_dlp --add-header "Referer:https://megaplay.buzz/" --merge-output-format mp4 --no-part "https://cdn.mewstream.buzz/anime/a8f15eda80c50adb0e71943adc8015cf/d656e6fea156fc85f8b12b9d1aa68fb7/master.m3u8" -o "YUKI_-_SUB.mp4"
-//     //subtitles
-//        //curl "https://zaza.animex.one/?u=G0cXAkBOcERSCTZeE14RFBZcDQFWGnETSgNwBkYfCwwRRwoGXxEsREUfCEICQ09LMXIPGVIsLTkcHDFdJ2NXSA&origin=https%3A%2F%2Fwww.animeonsen.xyz%2F" -H "Referer: https://www.animeonsen.xyz/" -o subs.vtt && more subs.vtt
-//     console.log("\n===== STREAMS =====");
-//     streams.forEach(s => {
-//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
+    //video 
+        //python -m yt_dlp --add-header "Referer:https://megaplay.buzz/" --merge-output-format mp4 --no-part "https://cdn.mewstream.buzz/anime/a8f15eda80c50adb0e71943adc8015cf/d656e6fea156fc85f8b12b9d1aa68fb7/master.m3u8" -o "YUKI_-_SUB.mp4"
+    //subtitles
+       //curl "https://zaza.animex.one/?u=G0cXAkBOcERSCTZeE14RFBZcDQFWGnETSgNwBkYfCwwRRwoGXxEsREUfCEICQ09LMXIPGVIsLTkcHDFdJ2NXSA&origin=https%3A%2F%2Fwww.animeonsen.xyz%2F" -H "Referer: https://www.animeonsen.xyz/" -o subs.vtt && more subs.vtt
+    console.log("\n===== STREAMS =====");
+    streams.forEach(s => {
+        const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
         
-//         // Use this stream's own tracks, fallback to global subtitles, fallback to nothing
-//         const streamSubs = s.tracks?.length > 0 ? s.tracks : subtitles;
-//         const subUrl = s.tracks?.length > 0 ? (s.tracks[0]?.url ?? null) : null;
+        // Use this stream's own tracks, fallback to global subtitles, fallback to nothing
+        const streamSubs = s.tracks?.length > 0 ? s.tracks : subtitles;
+        const subUrl = s.tracks?.length > 0 ? (s.tracks[0]?.url ?? null) : null;
 
-//         console.log(`\n[${s.title}]`);
-//         console.log(`\n# 1. Download video:`);
-//         //"${s.title.replace(/ /g,'_')}.mp4"
-//         console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
-//         console.log(`\n# 2. Download subtitles separately:`);
-//         if (subUrl) {
-//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-//         } else {
-//             console.log(`# No subtitles available for this stream`);
-//         }
-//         console.log(`\n# 3. Merge video + subtitles:`);
-//         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);        
-//     });
+        console.log(`\n[${s.title}]`);
+        console.log(`\n# 1. Download video:`);
+        //"${s.title.replace(/ /g,'_')}.mp4"
+        console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
+        console.log(`\n# 2. Download subtitles separately:`);
+        if (subUrl) {
+            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+        } else {
+            console.log(`# No subtitles available for this stream`);
+        }
+        console.log(`\n# 3. Merge video + subtitles:`);
+        console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);        
+    });
 
-//     console.log("\n===== SUBTITLES =====");
-//     if (subtitles.length > 0) {
-//         subtitles.forEach(t => console.log(JSON.stringify(t)));
+    console.log("\n===== SUBTITLES =====");
+    if (subtitles.length > 0) {
+        subtitles.forEach(t => console.log(JSON.stringify(t)));
 
-//     } else {
-//         console.log("No subtitles found");
-//     }
-// })();
+    } else {
+        console.log("No subtitles found");
+    }
+})();
 
 // ***** LOCAL TESTING
 
@@ -688,7 +688,9 @@ async function extractStreamUrl(url) {
             const streamUrl = source.url;
             const headers = sourcesData.headers || {};
             //NEW
-            const tracks = sourcesData.captions || sourcesData.tracks || sourcesData.subtitles || [];
+            const raw = sourcesData.captions ?? sourcesData.tracks ?? sourcesData.subtitles;
+            const tracks = Array.isArray(raw) ? raw.map(t => ({ file: t.url })).filter(t => t.file) : [];
+
 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
@@ -704,36 +706,30 @@ async function extractStreamUrl(url) {
             const stream = await fetchProviderStream(provider, 'sub');
             if (!stream) continue;
             streams.push(stream);
-            if (stream.tracks.length > 0 && subtitles === "") {
-                subtitles = stream.tracks.map(t => t.url).filter(Boolean);
-                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
-            }
+            console.log("[extractStreamUrl] Stream: " + stream.title + " tracks: " + JSON.stringify(stream.tracks));
         }
 
         for (const provider of dubProviders) {
             const stream = await fetchProviderStream(provider, 'dub');
             if (!stream) continue;
             streams.push(stream);
-            if (stream.tracks.length > 0 && subtitles === "") {
-                subtitles = stream.tracks.map(t => t.url).filter(Boolean);
-                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
-            }
+            console.log("[extractStreamUrl] Stream: " + stream.title + " tracks: " + JSON.stringify(stream.tracks));
         }
 
 
         console.log("[extractStreamUrl] Total streams found: " + streams.length);
         const result = JSON.stringify({ streams, subtitles });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-        // console.log("=============================");
-        // console.log("=============================");
-        // console.log("=============================");
-        // console.log("=============================");
+        console.log("=============================");
+        console.log("=============================");
+        console.log("=============================");
+        console.log("=============================");
 
-        // console.log(JSON.stringify(subtitles));
-        // console.log("=============================");
-        // console.log("=============================");
-        // console.log("=============================");
-        // console.log("=============================");
+        console.log(JSON.stringify({streams, subtitles}));
+        console.log("=============================");
+        console.log("=============================");
+        console.log("=============================");
+        console.log("=============================");
 
         return result;
     } catch (error) {
