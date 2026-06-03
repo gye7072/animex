@@ -346,28 +346,36 @@ class Anilist {
 
 // ***** LOCAL TESTING
 
+//3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
+//curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 // (async() => {
 //     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
 //     console.log("HREF:", href);
-
+ 
 //     const episodes = await extractEpisodes(href);
 //     const firstEpisodeHref = JSON.parse(episodes)[5].href;
 //     console.log("EPISODE HREF:", firstEpisodeHref);
-
+ 
 //     const streamUrl = await extractStreamUrl(firstEpisodeHref);
 //     const parsed = JSON.parse(streamUrl);
 //     const streams = parsed.streams;
 //     const subtitles = parsed.subtitles;
-
+ 
 //     console.log("\n===== STREAMS =====");
 //     streams.forEach(s => {
-//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
 //         const subUrl = s.subtitleUrl || subtitles || null;
-
+//         const isHls = /\.m3u8/i.test(s.streamUrl);
+//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
+ 
 //         console.log(`\n[${s.title}]`);
 //         console.log(`\n# 1. Download video:`);
-//         console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
+//         if (isHls) {
+//             console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
+//         } else {
+//             const refHeader = s.headers?.Referer || "https://animex.one";
+//             console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
+//         }
 //         console.log(`\n# 2. Download subtitles separately:`);
 //         if (subUrl) {
 //             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
@@ -377,7 +385,7 @@ class Anilist {
 //         console.log(`\n# 3. Merge video + subtitles:`);
 //         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
 //     });
-
+ 
 //     console.log("\n===== SUBTITLES =====");
 //     if (subtitles) {
 //         console.log(subtitles);
@@ -621,95 +629,122 @@ function slugify(title) {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-");
 }
-
+// ─── CDN rewrite ───────────────────────────────────────────────────────────
+// Rewrites tools.fast4speed.rsvp/media6/... → mp4.24stream.xyz/storage/media6/...
+// Any other non-preferred host is also rewritten.
+const CDN_REWRITE_HOST = "mp4.24stream.xyz";
+ 
+function rewriteStreamCdn(url) {
+    try {
+        const u = new URL(url);
+        // Already on the preferred CDN — leave it alone
+        if (u.hostname === CDN_REWRITE_HOST) return url;
+        u.hostname = CDN_REWRITE_HOST;
+        // Ensure path starts with /storage
+        if (!u.pathname.startsWith("/storage")) {
+            u.pathname = "/storage" + u.pathname;
+        }
+        return u.toString();
+    } catch {
+        return url; // not a valid URL, return as-is
+    }
+}
+ 
 // ─── Extract Stream URL (NEW, uses rate‑limited animexFetch) ───
 async function extractStreamUrl(url) {
     try {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
         if (!match) throw new Error('Invalid URL format');
-
+ 
         const slug = match[2];
         const episodeNumber = match[3];
-
+ 
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
-
+ 
         // CDN preference: prefer URLs containing these hostnames (in priority order)
         const CDN_PREFERRED_HOSTS = [
             'cdn.',
             'zaza.',
         ];
-
-
+ 
         function getCdnPriority(url) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
                 if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
             }
             return CDN_PREFERRED_HOSTS.length;
         }
-
+ 
         function getBestSubtitleUrl(tracks) {
             if (!tracks || tracks.length === 0) return null;
             const sorted = [...tracks].sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
             return sorted[0].url;
         }
-
+ 
         // 1. Fetch available servers
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
-
+ 
         const serversResp = await animexFetch(serversUrl);
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
             return JSON.stringify({ streams: [], subtitles: "" });
         }
-
+ 
         const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
-
+ 
         console.log("[extractStreamUrl] Sub providers: " + JSON.stringify(subProviders.map(p => p.id)));
         console.log("[extractStreamUrl] Dub providers: " + JSON.stringify(dubProviders.map(p => p.id)));
-
+ 
         // Helper to fetch a stream from a provider
         async function fetchProviderStream(provider, type) {
             const providerId = provider.id;
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
-
+ 
             const sourcesResp = await animexFetch(sourcesUrl);
             if (!sourcesResp || sourcesResp.status !== 200) {
                 console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
                 return null;
             }
-
+ 
             const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
             }
-
+ 
             const source = sourcesData.sources[0];
-            const streamUrl = source.url;
             const headers = sourcesData.headers || {};
-
+ 
+            // Rewrite CDN host for direct MP4 streams (not HLS)
+            const rawUrl = source.url;
+            const isHls = /\.m3u8/i.test(rawUrl);
+            const streamUrl = isHls ? rawUrl : rewriteStreamCdn(rawUrl);
+ 
+            if (streamUrl !== rawUrl) {
+                console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + streamUrl);
+            }
+ 
             // Only pull URLs from tracks, pick best CDN one
             const rawTracks = (sourcesData.tracks || []).map(t => ({ url: t.url }));
             const subtitleUrl = getBestSubtitleUrl(rawTracks);
-
+ 
             if (subtitleUrl) {
                 console.log("[extractStreamUrl] Best subtitle for " + providerId + ": " + subtitleUrl);
             }
-
+ 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
-
+ 
             return { title, streamUrl, headers, subtitleUrl };
         }
-
+ 
         // Build all streams sequentially (the rate limiter will space them out)
         const streams = [];
         const allSubtitleUrls = [];
-
+ 
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
             if (stream) {
@@ -719,7 +754,7 @@ async function extractStreamUrl(url) {
                 }
             }
         }
-
+ 
         for (const provider of dubProviders) {
             const stream = await fetchProviderStream(provider, 'dub');
             if (stream) {
@@ -729,10 +764,10 @@ async function extractStreamUrl(url) {
                 }
             }
         }
-
+ 
         // Pick the single best CDN subtitle URL across all streams
         const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
-
+ 
         // Assign the global best subtitle to any stream that has no subtitleUrl (!stream.subtitleUrl && bestSubtitleUrl)
         // Always uses best CDN subtitle, overriding any stream-specific one
         for (const stream of streams) {
@@ -740,20 +775,21 @@ async function extractStreamUrl(url) {
                 stream.subtitleUrl = bestSubtitleUrl;
             }
         }
-
+ 
         console.log("[extractStreamUrl] Total streams found: " + streams.length);
         console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitleUrl);
-
+ 
         const result = JSON.stringify({ streams, subtitles: bestSubtitleUrl });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-
+        console.log(result);
         return result;
-
+ 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
         return JSON.stringify({ streams: [], subtitles: "" });
     }
 }
+ 
 
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
