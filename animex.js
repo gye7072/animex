@@ -705,7 +705,7 @@ async function extractStreamUrl(url) {
             if (!stream) continue;
             streams.push(stream);
             if (stream.tracks.length > 0 && subtitles === "") {
-                subtitles = stream.tracks; // just take the first one found, store as-is
+                subtitles = stream.tracks.map(t => t.url).filter(Boolean);
                 console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
             }
         }
@@ -715,7 +715,7 @@ async function extractStreamUrl(url) {
             if (!stream) continue;
             streams.push(stream);
             if (stream.tracks.length > 0 && subtitles === "") {
-                subtitles = stream.tracks;
+                subtitles = stream.tracks.map(t => t.url).filter(Boolean);
                 console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
             }
         }
@@ -724,8 +724,18 @@ async function extractStreamUrl(url) {
         console.log("[extractStreamUrl] Total streams found: " + streams.length);
         const result = JSON.stringify({ streams, subtitles });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-        return result;
+        // console.log("=============================");
+        // console.log("=============================");
+        // console.log("=============================");
+        // console.log("=============================");
 
+        // console.log(JSON.stringify(subtitles));
+        // console.log("=============================");
+        // console.log("=============================");
+        // console.log("=============================");
+        // console.log("=============================");
+
+        return result;
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
         return JSON.stringify({ streams: [], subtitles: "" });
