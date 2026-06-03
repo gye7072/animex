@@ -1,8 +1,8 @@
 //git init
 // git add .
 // git commit -m "remove setTimeout rate limiter"
-// git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-// git push -u origin master
+// git remote add origin main
+// git push -u origin main
 
 // git add .
 // git commit -m "remove setTimeout rate limiter"
