@@ -658,7 +658,7 @@ async function extractStreamUrl(url) {
         const serversResp = await animexFetch(serversUrl);
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: null });
+            return JSON.stringify({ streams: [], subtitles: "" });
         }
 
         const serversData = await serversResp.json();
@@ -748,7 +748,7 @@ async function extractStreamUrl(url) {
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitles: null });
+        return JSON.stringify({ streams: [], subtitles: "" });
     }
 }
 
