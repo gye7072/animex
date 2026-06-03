@@ -346,45 +346,45 @@ class Anilist {
 
 // ***** LOCAL TESTING
 
-(async() => {
-    const results = await searchResults('Erased');
-    const href = JSON.parse(results)[0].href;
-    console.log("HREF:", href);
+// (async() => {
+//     const results = await searchResults('Erased');
+//     const href = JSON.parse(results)[0].href;
+//     console.log("HREF:", href);
 
-    const episodes = await extractEpisodes(href);
-    const firstEpisodeHref = JSON.parse(episodes)[1].href;
-    console.log("EPISODE HREF:", firstEpisodeHref);
+//     const episodes = await extractEpisodes(href);
+//     const firstEpisodeHref = JSON.parse(episodes)[1].href;
+//     console.log("EPISODE HREF:", firstEpisodeHref);
 
-    const streamUrl = await extractStreamUrl(firstEpisodeHref);
-    const parsed = JSON.parse(streamUrl);
-    const streams = parsed.streams;
-    const subtitles = parsed.subtitles;
+//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
+//     const parsed = JSON.parse(streamUrl);
+//     const streams = parsed.streams;
+//     const subtitles = parsed.subtitles;
 
-    console.log("\n===== STREAMS =====");
-    streams.forEach(s => {
-        const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
-        const subUrl = s.subtitleUrl || subtitles || null;
+//     console.log("\n===== STREAMS =====");
+//     streams.forEach(s => {
+//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
+//         const subUrl = s.subtitleUrl || subtitles || null;
 
-        console.log(`\n[${s.title}]`);
-        console.log(`\n# 1. Download video:`);
-        console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
-        console.log(`\n# 2. Download subtitles separately:`);
-        if (subUrl) {
-            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-        } else {
-            console.log(`# No subtitles available for this stream`);
-        }
-        console.log(`\n# 3. Merge video + subtitles:`);
-        console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-    });
+//         console.log(`\n[${s.title}]`);
+//         console.log(`\n# 1. Download video:`);
+//         console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
+//         console.log(`\n# 2. Download subtitles separately:`);
+//         if (subUrl) {
+//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+//         } else {
+//             console.log(`# No subtitles available for this stream`);
+//         }
+//         console.log(`\n# 3. Merge video + subtitles:`);
+//         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//     });
 
-    console.log("\n===== SUBTITLES =====");
-    if (subtitles) {
-        console.log(subtitles);
-    } else {
-        console.log("No subtitles found");
-    }
-})();
+//     console.log("\n===== SUBTITLES =====");
+//     if (subtitles) {
+//         console.log(subtitles);
+//     } else {
+//         console.log("No subtitles found");
+//     }
+// })();
 
 // ***** LOCAL TESTING
 
