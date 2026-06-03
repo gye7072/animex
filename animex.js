@@ -649,6 +649,7 @@ async function extractStreamUrl(url) {
 
         // 1. Fetch available servers
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
+        //https://pp.animex.one/rest/api/servers?id=erased-xcac4&epNum=1
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
 
         const serversResp = await animexFetch(serversUrl);
@@ -669,6 +670,7 @@ async function extractStreamUrl(url) {
             const providerId = provider.id;
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
+            //https://pp.animex.one/rest/api/sources?id=erased-xcac4&epNum=1&type=sub&providerId=beep
 
             const sourcesResp = await animexFetch(sourcesUrl);
             if (!sourcesResp || sourcesResp.status !== 200) {
@@ -685,26 +687,39 @@ async function extractStreamUrl(url) {
             const source = sourcesData.sources[0];
             const streamUrl = source.url;
             const headers = sourcesData.headers || {};
+            //NEW
+            const tracks = sourcesData.captions || sourcesData.tracks || sourcesData.subtitles || [];
 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
-            return { title, streamUrl, headers };
+            return { title, streamUrl, headers, tracks };
         }
 
         // Build all streams sequentially (the rate limiter will space them out)
         const streams = [];
-        let subtitles = "";
+        let subtitles = [];
 
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
-            if (stream) streams.push(stream);
+            if (!stream) continue;  // skip null streams entirely
+            streams.push(stream);
+            if (stream.tracks.length > 0) {
+                subtitles = [...subtitles, ...stream.tracks];
+                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(stream.tracks));
+            }
         }
 
         for (const provider of dubProviders) {
             const stream = await fetchProviderStream(provider, 'dub');
-            if (stream) streams.push(stream);
+            if (!stream) continue;
+            streams.push(stream);
+            if (stream.tracks.length > 0) {
+                subtitles = [...subtitles, ...stream.tracks];
+                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(stream.tracks));
+            }
         }
+
 
         console.log("[extractStreamUrl] Total streams found: " + streams.length);
         const result = JSON.stringify({ streams, subtitles });
@@ -713,9 +728,11 @@ async function extractStreamUrl(url) {
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitles: "" });
+        return JSON.stringify({ streams: [], subtitles: [] });
     }
 }
+
+
 
 
 // ─── SoraFetch (fallback wrapper, unchanged) ───
