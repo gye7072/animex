@@ -348,57 +348,57 @@ class Anilist {
 
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
-// (async() => {
-//     const results = await searchResults('Crest of Stars');
-//     const href = JSON.parse(results)[0].href;
-//     console.log("HREF:", href);
+(async() => {
+    const results = await searchResults('Crest of Stars');
+    const href = JSON.parse(results)[0].href;
+    console.log("HREF:", href);
  
-//     const episodes = await extractEpisodes(href);
-//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
-//     console.log("EPISODE HREF:", firstEpisodeHref);
+    const episodes = await extractEpisodes(href);
+    const firstEpisodeHref = JSON.parse(episodes)[5].href;
+    console.log("EPISODE HREF:", firstEpisodeHref);
  
-//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
-//     const parsed = JSON.parse(streamUrl);
-//     const streams = parsed.streams;
-//     const subtitles = parsed.subtitles; //the best subtitle
+    const streamUrl = await extractStreamUrl(firstEpisodeHref);
+    const parsed = JSON.parse(streamUrl);
+    const streams = parsed.streams;
+    const subtitles = parsed.subtitles; //the best subtitle
  
-//     console.log("\n===== STREAMS =====");
-//     streams.forEach(s => {
-//         const subUrl = s.subtitleUrl || subtitles || null;
-//         // const isHls = /\.m3u8/i.test(s.streamUrl);
-//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
+    console.log("\n===== STREAMS =====");
+    streams.forEach(s => {
+        const subUrl = s.subtitleUrl || subtitles || null;
+        // const isHls = /\.m3u8/i.test(s.streamUrl);
+        const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
  
-//         console.log(`\n[${s.title}]`);
-//         console.log(`\n# 1. Download video:`);
-//         // if (isHls) {
-//         //     console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
-//         // } else {
-//         //     const refHeader = s.headers?.Referer || "https://animex.one";
-//         //     console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
-//         //     console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
-//         // }
+        console.log(`\n[${s.title}]`);
+        console.log(`\n# 1. Download video:`);
+        // if (isHls) {
+        //     console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
+        // } else {
+        //     const refHeader = s.headers?.Referer || "https://animex.one";
+        //     console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
+        //     console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+        // }
 
-//         const refHeader = s.headers?.Referer || "https://animex.one";
-//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
-//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+        const refHeader = s.headers?.Referer || "https://animex.one";
+        console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
+        console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
-//         console.log(`\n# 2. Download subtitles separately:`);
-//         if (s.subtitleUrl) {
-//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-//         } else {
-//             console.log(`# No subtitles available for this stream`);
-//         }
-//         console.log(`\n# 3. Merge video + subtitles:`);
-//         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-//     });
+        console.log(`\n# 2. Download subtitles separately:`);
+        if (s.subtitleUrl) {
+            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+        } else {
+            console.log(`# No subtitles available for this stream`);
+        }
+        console.log(`\n# 3. Merge video + subtitles:`);
+        console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+    });
  
-//     console.log("\n===== SUBTITLES =====");
-//     if (subtitles) {
-//         console.log(subtitles);
-//     } else {
-//         console.log("No subtitles found");
-//     }
-// })();
+    console.log("\n===== SUBTITLES =====");
+    if (subtitles) {
+        console.log(subtitles);
+    } else {
+        console.log("No subtitles found");
+    }
+})();
 
 // ***** LOCAL TESTING
 
@@ -636,14 +636,10 @@ function slugify(title) {
       .replace(/-+/g, "-");
 }
 // ─── CDN rewrite ───────────────────────────────────────────────────────────
-// Rewrites tools.fast4speed.rsvp/media6/... → mp4.24stream.xyz/storage/media6/...
-// Any other non-preferred host is also rewritten.
- 
 function rewriteMochiCdn(url) {
     try {
         console.log("[rewriteMochiCdn] called with: " + url);
         
-        // Pure string replace — no URL parsing
         if (url.includes("tools.fast4speed.rsvp/media6/")) {
             const result = url.replace(
                 "tools.fast4speed.rsvp/media6/",
@@ -661,7 +657,7 @@ function rewriteMochiCdn(url) {
     }
 }
 
-// ─── Extract Stream URL (NEW, uses rate‑limited animexFetch) ───
+// ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
@@ -672,7 +668,6 @@ async function extractStreamUrl(url) {
  
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
  
-        // CDN preference: prefer URLs containing these hostnames (in priority order)
         const CDN_PREFERRED_HOSTS = [
             'cdn.',
             'zaza.',
@@ -727,11 +722,10 @@ async function extractStreamUrl(url) {
             }
  
             const source = sourcesData.sources[0];
-            const headers = sourcesData.headers || {};
- 
+            const apiHeaders = sourcesData.headers || {};
+
             // Rewrite CDN host for direct MP4 streams (not HLS)
             const rawUrl = source.url;
-
             const isMochi = providerId.toLowerCase() === "mochi";
             const streamUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
 
@@ -749,11 +743,19 @@ async function extractStreamUrl(url) {
  
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
+
+            // Use API headers directly, only inject User-Agent if missing
+            const headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0",
+                ...apiHeaders
+            };
+
+            console.log("[extractStreamUrl] Headers for " + providerId + ": " + JSON.stringify(headers));
  
             return { title, streamUrl, headers, subtitleUrl };
         }
  
-        // Build all streams sequentially (the rate limiter will space them out)
+        // Build all streams sequentially
         const streams = [];
         const allSubtitleUrls = [];
  
@@ -780,8 +782,7 @@ async function extractStreamUrl(url) {
         // Pick the single best CDN subtitle URL across all streams
         const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
  
-        // Assign the global best subtitle to any stream that has no subtitleUrl (!stream.subtitleUrl && bestSubtitleUrl)
-        // Always uses best CDN subtitle, overriding any stream-specific one
+        // Always use best CDN subtitle, overriding any stream-specific one
         for (const stream of streams) {
             if (stream.subtitleUrl && bestSubtitleUrl) { 
                 stream.subtitleUrl = bestSubtitleUrl; 
@@ -801,8 +802,6 @@ async function extractStreamUrl(url) {
         return JSON.stringify({ streams: [], subtitles: "" });
     }
 }
- 
-
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
     try {
