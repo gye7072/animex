@@ -638,24 +638,20 @@ function slugify(title) {
 // ─── CDN rewrite ───────────────────────────────────────────────────────────
 // Rewrites tools.fast4speed.rsvp/media6/... → mp4.24stream.xyz/storage/media6/...
 // Any other non-preferred host is also rewritten.
-const CDN_REWRITE_HOST = "mp4.24stream.xyz";
  
-function rewriteStreamCdn(url) {
+function rewriteMochiCdn(url) {
     try {
         const u = new URL(url);
-        // Already on the preferred CDN — leave it alone
-        if (u.hostname === CDN_REWRITE_HOST) return url;
-        u.hostname = CDN_REWRITE_HOST;
-        // Ensure path starts with /storage
+        if (u.hostname !== "tools.fast4speed.rsvp") return url; // only rewrite this specific host
+        u.hostname = "mp4.24stream.xyz";
         if (!u.pathname.startsWith("/storage")) {
             u.pathname = "/storage" + u.pathname;
         }
         return u.toString();
     } catch {
-        return url; // not a valid URL, return as-is
+        return url;
     }
 }
- 
 // ─── Extract Stream URL (NEW, uses rate‑limited animexFetch) ───
 async function extractStreamUrl(url) {
     try {
@@ -726,9 +722,10 @@ async function extractStreamUrl(url) {
  
             // Rewrite CDN host for direct MP4 streams (not HLS)
             const rawUrl = source.url;
-            const isHls = /\.m3u8/i.test(rawUrl);
-            const streamUrl = isHls ? rawUrl : rewriteStreamCdn(rawUrl);
- 
+
+            const isMochi = providerId.toLowerCase() === "mochi";
+            const streamUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
+
             if (streamUrl !== rawUrl) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + streamUrl);
             }
