@@ -698,15 +698,15 @@ async function extractStreamUrl(url) {
 
         // Build all streams sequentially (the rate limiter will space them out)
         const streams = [];
-        let subtitles = [];
+        let subtitles = "";
 
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
-            if (!stream) continue;  // skip null streams entirely
+            if (!stream) continue;
             streams.push(stream);
-            if (stream.tracks.length > 0) {
-                subtitles = [...subtitles, ...stream.tracks];
-                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(stream.tracks));
+            if (stream.tracks.length > 0 && subtitles === "") {
+                subtitles = stream.tracks; // just take the first one found, store as-is
+                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
             }
         }
 
@@ -714,9 +714,9 @@ async function extractStreamUrl(url) {
             const stream = await fetchProviderStream(provider, 'dub');
             if (!stream) continue;
             streams.push(stream);
-            if (stream.tracks.length > 0) {
-                subtitles = [...subtitles, ...stream.tracks];
-                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(stream.tracks));
+            if (stream.tracks.length > 0 && subtitles === "") {
+                subtitles = stream.tracks;
+                console.log("[extractStreamUrl] Got subtitles from " + stream.title + ": " + JSON.stringify(subtitles));
             }
         }
 
@@ -728,7 +728,7 @@ async function extractStreamUrl(url) {
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitles: [] });
+        return JSON.stringify({ streams: [], subtitles: "" });
     }
 }
 
