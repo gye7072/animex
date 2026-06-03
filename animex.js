@@ -363,10 +363,7 @@ class Anilist {
     console.log("\n===== STREAMS =====");
     streams.forEach(s => {
         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
-
-        // Use this stream's own tracks, fallback to global subtitles, fallback to nothing
-        const streamSubs = s.tracks?.length > 0 ? s.tracks : subtitles;
-        const subUrl = streamSubs.length > 0 ? (streamSubs[0]?.url ?? null) : null;
+        const subUrl = s.subtitleUrl || subtitles || null;
 
         console.log(`\n[${s.title}]`);
         console.log(`\n# 1. Download video:`);
@@ -382,8 +379,8 @@ class Anilist {
     });
 
     console.log("\n===== SUBTITLES =====");
-    if (subtitles.length > 0) {
-        subtitles.forEach(t => console.log(JSON.stringify(t)));
+    if (subtitles) {
+        console.log(subtitles);
     } else {
         console.log("No subtitles found");
     }
@@ -638,7 +635,7 @@ async function extractStreamUrl(url) {
 
         // CDN preference: prefer URLs containing these hostnames (in priority order)
         const CDN_PREFERRED_HOSTS = [
-            'cdn.',          // any other cdn. subdomain
+            'cdn.',
             'lostproject.club',
         ];
 
@@ -646,11 +643,13 @@ async function extractStreamUrl(url) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
                 if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
             }
-            return CDN_PREFERRED_HOSTS.length; // lowest priority
+            return CDN_PREFERRED_HOSTS.length;
         }
 
-        function sortTracksByCdn(tracks) {
-            return [...tracks].sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
+        function getBestSubtitleUrl(tracks) {
+            if (!tracks || tracks.length === 0) return null;
+            const sorted = [...tracks].sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
+            return sorted[0].url;
         }
 
         // 1. Fetch available servers
@@ -660,7 +659,7 @@ async function extractStreamUrl(url) {
         const serversResp = await animexFetch(serversUrl);
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: [] });
+            return JSON.stringify({ streams: [], subtitles: null });
         }
 
         const serversData = await serversResp.json();
@@ -692,39 +691,30 @@ async function extractStreamUrl(url) {
             const streamUrl = source.url;
             const headers = sourcesData.headers || {};
 
-            // Extract tracks and sort so CDN URLs come first
-            const rawTracks = (sourcesData.tracks || []).map(t => ({
-                url: t.url,
-                lang: t.lang || t.language || 'english',
-                label: t.label || t.lang || 'English',
-                kind: t.kind || 'captions',
-                default: t.default || false
-            }));
+            // Only pull URLs from tracks, pick best CDN one
+            const rawTracks = (sourcesData.tracks || []).map(t => ({ url: t.url }));
+            const subtitleUrl = getBestSubtitleUrl(rawTracks);
 
-            const tracks = sortTracksByCdn(rawTracks);
-
-            if (tracks.length > 0) {
-                console.log("[extractStreamUrl] Best subtitle for " + providerId + ": " + tracks[0].url);
+            if (subtitleUrl) {
+                console.log("[extractStreamUrl] Best subtitle for " + providerId + ": " + subtitleUrl);
             }
 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
-            return { title, streamUrl, headers, tracks };
+            return { title, streamUrl, headers, subtitleUrl };
         }
 
         // Build all streams sequentially (the rate limiter will space them out)
         const streams = [];
-        const allSubtitles = [];
+        const allSubtitleUrls = [];
 
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
             if (stream) {
                 streams.push(stream);
-                for (const t of (stream.tracks || [])) {
-                    if (!allSubtitles.find(s => s.url === t.url)) {
-                        allSubtitles.push(t);
-                    }
+                if (stream.subtitleUrl && !allSubtitleUrls.includes(stream.subtitleUrl)) {
+                    allSubtitleUrls.push(stream.subtitleUrl);
                 }
             }
         }
@@ -733,31 +723,33 @@ async function extractStreamUrl(url) {
             const stream = await fetchProviderStream(provider, 'dub');
             if (stream) {
                 streams.push(stream);
-                for (const t of (stream.tracks || [])) {
-                    if (!allSubtitles.find(s => s.url === t.url)) {
-                        allSubtitles.push(t);
-                    }
+                if (stream.subtitleUrl && !allSubtitleUrls.includes(stream.subtitleUrl)) {
+                    allSubtitleUrls.push(stream.subtitleUrl);
                 }
             }
         }
 
-        // Final global subtitles list also sorted by CDN preference
-        const sortedSubtitles = sortTracksByCdn(allSubtitles);
+        // Pick the single best CDN subtitle URL across all streams
+        const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
 
-        console.log("[extractStreamUrl] Total streams found: " + streams.length);
-        console.log("[extractStreamUrl] Total subtitles found: " + sortedSubtitles.length);
-        if (sortedSubtitles.length > 0) {
-            console.log("[extractStreamUrl] Top subtitle: " + sortedSubtitles[0].url);
+        // Assign the global best subtitle to any stream that has no subtitleUrl
+        for (const stream of streams) {
+            if (!stream.subtitleUrl && bestSubtitleUrl) {
+                stream.subtitleUrl = bestSubtitleUrl;
+            }
         }
 
-        const result = JSON.stringify({ streams, subtitles: sortedSubtitles });
+        console.log("[extractStreamUrl] Total streams found: " + streams.length);
+        console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitleUrl);
+
+        const result = JSON.stringify({ streams, subtitles: bestSubtitleUrl });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
         console.log(result);
         return result;
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitles: [] });
+        return JSON.stringify({ streams: [], subtitles: "" });
     }
 }
 
