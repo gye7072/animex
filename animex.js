@@ -711,16 +711,19 @@ async function extractStreamUrl(url) {
             // Any other non-preferred host is also rewritten.
             
             function rewriteMochiCdn(url) {
-                console.log("[rewriteMochiCdn] called with: " + url); // canary
                 try {
+                    console.log("[rewriteMochiCdn] hostname check: '" + new URL(url).hostname + "'");
+                    if (!url.includes("tools.fast4speed.rsvp")) return url; // use includes instead of hostname compare
                     const u = new URL(url);
-                    if (u.hostname !== "tools.fast4speed.rsvp") return url; // only rewrite this specific host
                     u.hostname = "mp4.24stream.xyz";
                     if (!u.pathname.startsWith("/storage")) {
                         u.pathname = "/storage" + u.pathname;
                     }
-                    return u.toString();
-                } catch {
+                    const result = u.toString();
+                    console.log("[rewriteMochiCdn] rewritten to: " + result);
+                    return result;
+                } catch (e) {
+                    console.log("[rewriteMochiCdn] error: " + e);
                     return url;
                 }
             }
