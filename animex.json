@@ -1,0 +1,20 @@
+{
+    "sourceName": "Animex",
+    "iconUrl": "https://raw.githubusercontent.com/gye7072/animex/refs/heads/main/icon.png",
+    "author": {
+        "name": "red",
+        "icon": "https://raw.githubusercontent.com/gye7072/animex/refs/heads/main/red.png",
+        "url": "https://github.com/gye7072"
+    },
+    "version": "1.1.24",
+    "language": "English",
+    "streamType": "HLS",
+    "quality": "1080p",
+    "baseUrl": "https://animex.one/",
+    "searchBaseUrl": "https://animex.one/search?query=%s",
+    "scriptUrl": "https://raw.githubusercontent.com/gye7072/animex/refs/heads/main/animex.js",
+    "type": "anime",
+    "downloadSupport": true,
+    "asyncJS": true,
+    "softsub": true
+}
