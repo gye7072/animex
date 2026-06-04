@@ -792,7 +792,7 @@ async function extractStreamUrl(url) {
             title,
             streamUrl,
             headers,
-            bestSubtitleUrl,
+            subtitleUrl,
         }));
 
         console.log("[extractStreamUrl] Total streams found: " + finalStreams.length);
