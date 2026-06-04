@@ -348,6 +348,7 @@ class Anilist {
 
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
+
 // (async() => {
 //     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
@@ -651,6 +652,7 @@ function rewriteMochiCdn(url) {
 
 
 // ─── Extract Stream URL ────────────────────────────────────────────────────
+// ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
@@ -666,19 +668,23 @@ async function extractStreamUrl(url) {
             'zaza.',
         ];
 
-        function getCdnPriority(url) {
+        function getCdnPriority(u) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
-                if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
+                if (u.includes(CDN_PREFERRED_HOSTS[i])) return i;
             }
             return CDN_PREFERRED_HOSTS.length;
         }
 
+        function getBestSubtitleUrl(urls) {
+            if (!urls || urls.length === 0) return null;
+            return [...urls].sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0];
+        }
+
         // ─── Rewrite JPG-segment HLS playlists ──────────────────────────────
         // Some providers serve HLS manifests where segments use .jpg extensions
-        // instead of standard .ts/.m4s. We proxy/rewrite via a passthrough that
-        // forces the correct MIME type so players can decode them properly.
+        // instead of standard .ts/.m4s. We rewrite the manifest as a data URI
+        // so the player can decode them without MIME type issues.
         async function resolveStreamUrl(rawUrl, headers) {
-            // Only attempt rewrite for HLS (.m3u8) URLs
             if (!rawUrl.includes('.m3u8')) return rawUrl;
 
             try {
@@ -687,21 +693,17 @@ async function extractStreamUrl(url) {
 
                 const text = await resp.text();
 
-                // Detect non-standard .jpg segments
                 const hasJpgSegments = /^(?!#)[^\s]+\.jpg/m.test(text);
-                if (!hasJpgSegments) return rawUrl; // normal HLS, use as-is
+                if (!hasJpgSegments) return rawUrl;
 
                 console.log("[resolveStreamUrl] Detected .jpg-segment HLS, rewriting manifest...");
 
-                // Resolve relative segment URLs against the playlist base
                 const base = rawUrl.substring(0, rawUrl.lastIndexOf('/') + 1);
                 const rewritten = text.replace(
                     /^(?!#)([^\s]+\.jpg)/gm,
                     (seg) => (seg.startsWith('http') ? seg : base + seg)
                 );
 
-                // Encode the rewritten manifest as a data URI so the player
-                // receives a self-contained, corrected playlist with no MIME issues.
                 const encoded = btoa(unescape(encodeURIComponent(rewritten)));
                 return `data:application/vnd.apple.mpegurl;base64,${encoded}`;
 
@@ -718,7 +720,7 @@ async function extractStreamUrl(url) {
         const serversResp = await animexFetch(serversUrl);
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [] });
+            return JSON.stringify({ streams: [], subtitle: null });
         }
 
         const serversData = await serversResp.json();
@@ -749,7 +751,7 @@ async function extractStreamUrl(url) {
             const source = sourcesData.sources[0];
             const apiHeaders = sourcesData.headers || {};
 
-            // Rewrite CDN host for direct MP4 streams (not HLS)
+            // Rewrite CDN host for Mochi direct MP4 streams
             const rawUrl = source.url;
             const isMochi = providerId.toLowerCase() === "mochi";
             const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
@@ -758,7 +760,7 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
 
-            // Safely extract Referer and Origin as plain strings only
+            // Safely extract Referer and Origin
             const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
                 || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
                 || "https://animex.one";
@@ -769,23 +771,32 @@ async function extractStreamUrl(url) {
 
             const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
-            // yt-dlp / app-compatible header format: "Key: Value" strings
-            const headers = [
-                `Referer: ${referer}`,
-                `Origin: ${origin}`,
-                `User-Agent: ${userAgent}`,
-            ];
+            const headers = {
+                "Referer": referer,
+                "Origin": origin,
+                "User-Agent": userAgent,
+            };
 
             console.log("[extractStreamUrl] Headers for " + providerId + ": " + JSON.stringify(headers));
 
-            // Attempt to rewrite .jpg-segment HLS manifests into a player-safe form
-            const headersObj = { Referer: referer, Origin: origin, "User-Agent": userAgent };
-            const streamUrl = await resolveStreamUrl(resolvedUrl, headersObj);
+            // Attempt to rewrite .jpg-segment HLS manifests
+            const streamUrl = await resolveStreamUrl(resolvedUrl, headers);
+
+            // Collect subtitle from tracks, pick best CDN URL
+            const rawTracks = (sourcesData.tracks || []).map(t => ({ url: t.url }));
+            const subtitleUrl = rawTracks.length > 0
+                ? getBestSubtitleUrl(rawTracks.map(t => t.url))
+                : null;
+
+            if (subtitleUrl) {
+                console.log("[extractStreamUrl] Subtitle for " + providerId + ": " + subtitleUrl);
+            }
 
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
-            return { title, streamUrl, headers };
+            // subtitleUrl is internal — stripped before final return
+            return { title, streamUrl, headers, subtitleUrl };
         }
 
         // Build all streams sequentially
@@ -801,18 +812,30 @@ async function extractStreamUrl(url) {
             if (stream) streams.push(stream);
         }
 
-        console.log("[extractStreamUrl] Total streams found: " + streams.length);
+        // Pick the single best subtitle URL across all streams
+        const allSubtitleUrls = streams.map(s => s.subtitleUrl).filter(Boolean);
+        const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
 
-        const result = JSON.stringify({ streams });
+        // Strip internal subtitleUrl from each stream before returning
+        const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => rest);
+
+        console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
+        console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
+
+        const result = JSON.stringify({
+            streams: cleanStreams,
+            subtitle: bestSubtitle
+        });
+
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
+        console.log(JSON.parse(result));
         return result;
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [] });
+        return JSON.stringify({ streams: [], subtitle: null });
     }
 }
-
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
     try {
