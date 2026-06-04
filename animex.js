@@ -752,10 +752,15 @@ async function extractStreamUrl(url) {
 
             const rawUrl = source.url;
             const isMochi = providerId.toLowerCase() === "mochi";
-            const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
 
-            if (resolvedUrl !== rawUrl) {
-                console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
+            // For Mochi: try rewritten CDN URL first, keep original as the streamUrl
+            // so the player can follow the redirect itself if needed
+            const rewrittenUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
+
+            // Log both for debugging
+            if (isMochi) {
+                console.log("[extractStreamUrl] Mochi original URL: " + rawUrl);
+                console.log("[extractStreamUrl] Mochi rewritten URL: " + rewrittenUrl);
             }
 
             console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders));
@@ -781,25 +786,23 @@ async function extractStreamUrl(url) {
 
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
 
-            // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
-            const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
+            // Direct MP4 — skip manifest fetch entirely
+            const isDirectMp4 = !rewrittenUrl.includes('.m3u8') && !rewrittenUrl.includes('.mpd');
             const streamUrl = isDirectMp4
-                ? resolvedUrl
-                : await resolveStreamUrl(resolvedUrl, headers);
+                ? rewrittenUrl
+                : await resolveStreamUrl(rewrittenUrl, headers);
 
             if (isDirectMp4) {
                 console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
             }
 
-            // Use track kind to determine if subtitle exists — let the API decide,
-            // not the provider name. If tracks exist and are captions/subtitles, use them.
+            // Always use caption/subtitle tracks from API — no hard/soft distinction
+            // The API always provides a separate caption track regardless of provider
             const rawTracks = (sourcesData.tracks || [])
                 .filter(t => t.url && (t.kind === "captions" || t.kind === "subtitles"))
                 .map(t => t.url);
 
-            const subtitleUrl = rawTracks.length > 0
-                ? getBestSubtitleUrl(rawTracks)
-                : null;
+            const subtitleUrl = getBestSubtitleUrl(rawTracks);
 
             if (subtitleUrl) {
                 console.log("[extractStreamUrl] Subtitle for " + providerId + ": " + subtitleUrl);
@@ -825,12 +828,10 @@ async function extractStreamUrl(url) {
             if (stream) streams.push(stream);
         }
 
-        // Best subtitle across all streams that have one
+        // Best subtitle across all streams
         const allSubtitleUrls = streams.map(s => s.subtitleUrl).filter(Boolean);
         const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
 
-        // Keep each stream's own subtitleUrl — don't override with global best
-        // so hard sub streams that have no tracks stay null
         const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
             ...rest,
             subtitleUrl: subtitleUrl || null
@@ -853,8 +854,6 @@ async function extractStreamUrl(url) {
         return JSON.stringify({ streams: [], subtitles: null });
     }
 }
-
-
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
     try {
