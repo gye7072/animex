@@ -652,7 +652,6 @@ function rewriteMochiCdn(url) {
 
 
 // ─── Extract Stream URL ────────────────────────────────────────────────────
-// ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
@@ -817,14 +816,17 @@ async function extractStreamUrl(url) {
         const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
 
         // Strip internal subtitleUrl from each stream before returning
-        const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => rest);
+        const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
+            ...rest,
+            subtitleUrl: bestSubtitle || subtitleUrl || null
+        }));
 
         console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
         console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
 
         const result = JSON.stringify({
             streams: cleanStreams,
-            subtitle: bestSubtitle
+            subtitles: bestSubtitle
         });
 
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
@@ -833,7 +835,7 @@ async function extractStreamUrl(url) {
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitle: null });
+        return JSON.stringify({ streams: [], subtitles: null });
     }
 }
 // ─── SoraFetch (fallback wrapper, unchanged) ───
