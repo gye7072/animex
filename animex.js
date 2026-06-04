@@ -788,10 +788,11 @@ async function extractStreamUrl(url) {
         const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
 
         // Strip subtitleUrl from each stream (not part of Sora's format)
-        const finalStreams = streams.map(({ title, streamUrl, headers }) => ({
+        const finalStreams = streams.map(({ title, streamUrl, headers, subtitleUrl }) => ({
             title,
             streamUrl,
-            headers
+            headers,
+            bestSubtitleUrl,
         }));
 
         console.log("[extractStreamUrl] Total streams found: " + finalStreams.length);
