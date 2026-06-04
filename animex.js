@@ -775,14 +775,18 @@ async function extractStreamUrl(url) {
 
             // Derive origin from referer if missing, or from streamUrl host as last resort
             const streamHost = "https://" + resolvedUrl.split('/')[2];
-            const finalReferer = referer || streamHost + "/";
-            const finalOrigin  = origin  || streamHost;
+            // Derive origin from referer if missing — strip trailing slash and path
+            const finalReferer = referer || "https://animex.one/";
+            const finalOrigin  = origin  || (finalReferer
+                ? finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1]
+                : "https://animex.one");
 
             const headers = {
                 "Referer":    finalReferer,
                 "Origin":     finalOrigin,
                 "User-Agent": userAgent,
             };
+
 
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
 
