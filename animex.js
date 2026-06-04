@@ -681,9 +681,6 @@ async function extractStreamUrl(url) {
         }
 
         // ─── Rewrite JPG-segment HLS playlists ──────────────────────────────
-        // Only called for .m3u8 streams — never for direct MP4s.
-        // If segments use .jpg extensions instead of .ts/.m4s, rewrites the
-        // manifest as a base64 data URI so the player handles it correctly.
         async function resolveStreamUrl(rawUrl, headers) {
             if (!rawUrl.includes('.m3u8')) return rawUrl;
 
@@ -723,7 +720,7 @@ async function extractStreamUrl(url) {
         const serversResp = await animexFetch(serversUrl);
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitle: null });
+            return JSON.stringify({ streams: [], subtitles: null });
         }
 
         const serversData = await serversResp.json();
@@ -733,7 +730,6 @@ async function extractStreamUrl(url) {
         console.log("[extractStreamUrl] Sub providers: " + JSON.stringify(subProviders.map(p => p.id)));
         console.log("[extractStreamUrl] Dub providers: " + JSON.stringify(dubProviders.map(p => p.id)));
 
-        // Helper to fetch a stream from a provider
         async function fetchProviderStream(provider, type) {
             const providerId = provider.id;
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
@@ -754,7 +750,6 @@ async function extractStreamUrl(url) {
             const source = sourcesData.sources[0];
             const apiHeaders = sourcesData.headers || {};
 
-            // Rewrite CDN host for Mochi direct MP4 streams
             const rawUrl = source.url;
             const isMochi = providerId.toLowerCase() === "mochi";
             const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
@@ -763,10 +758,8 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
 
-            // Log exactly what the API gave us
             console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders));
 
-            // Safely extract Referer and Origin — try all casing variants
             const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
                 || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
                 || null;
@@ -777,7 +770,6 @@ async function extractStreamUrl(url) {
 
             const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
-            // Derive origin from referer if missing — never fall back to stream host
             const finalReferer = referer || "https://animex.one/";
             const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
 
@@ -789,9 +781,6 @@ async function extractStreamUrl(url) {
 
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
 
-            // ─── Skip resolveStreamUrl for direct MP4 — never pre-fetch it ───
-            // Pre-fetching a direct MP4 with an Authorization token burns the
-            // token before the player can use it, causing playback failure.
             const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
             const streamUrl = isDirectMp4
                 ? resolvedUrl
@@ -801,7 +790,6 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
             }
 
-            // Collect subtitle from tracks, pick best CDN URL
             const rawTracks = (sourcesData.tracks || []).map(t => ({ url: t.url }));
             const subtitleUrl = rawTracks.length > 0
                 ? getBestSubtitleUrl(rawTracks.map(t => t.url))
@@ -814,10 +802,12 @@ async function extractStreamUrl(url) {
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
+            // ← log is here inside the function where providerId/streamUrl are in scope
+            console.log("[extractStreamUrl] Final object for " + providerId + ": " + JSON.stringify({ title, streamUrl, headers, subtitleUrl }));
+
             return { title, streamUrl, headers, subtitleUrl };
         }
 
-        // Build all streams sequentially
         const streams = [];
 
         for (const provider of subProviders) {
@@ -830,12 +820,9 @@ async function extractStreamUrl(url) {
             if (stream) streams.push(stream);
         }
 
-        // Pick the single best subtitle URL across all streams
         const allSubtitleUrls = streams.map(s => s.subtitleUrl).filter(Boolean);
         const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
 
-        // Include subtitle in each stream AND at top level
-        // Per-stream: subtitleUrl (not subtitle)
         const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
             ...rest,
             subtitleUrl: bestSubtitle || subtitleUrl || null
@@ -844,23 +831,21 @@ async function extractStreamUrl(url) {
         console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
         console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
 
-        // Top level: subtitles (plural, not subtitle)
         const result = JSON.stringify({
             streams: cleanStreams,
             subtitles: bestSubtitle
         });
 
-
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-        console.log("[extractStreamUrl] Stream " + providerId + " final object: " + JSON.stringify({ title, streamUrl, headers, subtitleUrl }));
-        // console.log(JSON.parse(result));
+        console.log(JSON.parse(result));
         return result;
 
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitle: null });
+        return JSON.stringify({ streams: [], subtitles: null });
     }
 }
+
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
     try {
