@@ -650,6 +650,29 @@ function rewriteMochiCdn(url) {
 }
 
 // ─── Extract Stream URL ────────────────────────────────────────────────────
+// ─── CDN rewrite ───────────────────────────────────────────────────────────
+function rewriteMochiCdn(url) {
+    try {
+        console.log("[rewriteMochiCdn] called with: " + url);
+        
+        if (url.includes("tools.fast4speed.rsvp/media6/")) {
+            const result = url.replace(
+                "tools.fast4speed.rsvp/media6/",
+                "mp4.24stream.xyz/storage/media6/"
+            );
+            console.log("[rewriteMochiCdn] rewritten to: " + result);
+            return result;
+        }
+
+        console.log("[rewriteMochiCdn] no rewrite needed");
+        return url;
+    } catch (e) {
+        console.log("[rewriteMochiCdn] error: " + e);
+        return url;
+    }
+}
+
+// ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
@@ -736,20 +759,27 @@ async function extractStreamUrl(url) {
             const tip = provider.tip ? ` (${provider.tip})` : '';
             const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
-            // Safely extract Referer and Origin as plain strings only
-            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
-                || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
-                || "";
-
-            const origin = (typeof apiHeaders.Origin === 'string' ? apiHeaders.Origin : null)
-                || (typeof apiHeaders.origin === 'string' ? apiHeaders.origin : null)
-                || "";
-
-            const headers = {
-                ...(referer && { "Referer": referer }),
-                ...(origin && { "Origin": origin }),
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-            };
+            // Hardcoded headers test for MOCHI SUB
+            let headers;
+            if (providerId.toLowerCase() === "mochi" && type === "sub") {
+                headers = {
+                    "Referer": "https://animex.one",
+                    "Origin": "https://animex.one",
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+                };
+            } else {
+                const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
+                    || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
+                    || "";
+                const origin = (typeof apiHeaders.Origin === 'string' ? apiHeaders.Origin : null)
+                    || (typeof apiHeaders.origin === 'string' ? apiHeaders.origin : null)
+                    || "";
+                headers = {
+                    ...(referer && { "Referer": referer }),
+                    ...(origin && { "Origin": origin }),
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+                };
+            }
 
             console.log("[extractStreamUrl] Headers for " + providerId + ": " + JSON.stringify(headers));
 
@@ -795,7 +825,7 @@ async function extractStreamUrl(url) {
 
         const result = JSON.stringify({ streams, subtitles: bestSubtitleUrl });
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-        console.log(JSON.parse(result));
+        console.log(result);
         return result;
 
     } catch (error) {
