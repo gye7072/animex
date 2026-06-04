@@ -835,21 +835,25 @@ async function extractStreamUrl(url) {
         const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
 
         // Include subtitle in each stream AND at top level
+        // Per-stream: subtitleUrl (not subtitle)
         const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
             ...rest,
-            subtitle: bestSubtitle || subtitleUrl || null
+            subtitleUrl: bestSubtitle || subtitleUrl || null
         }));
 
         console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
         console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
 
+        // Top level: subtitles (plural, not subtitle)
         const result = JSON.stringify({
             streams: cleanStreams,
-            subtitle: bestSubtitle
+            subtitles: bestSubtitle
         });
 
+
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
-        console.log(JSON.parse(result));
+        console.log("[extractStreamUrl] Stream " + providerId + " final object: " + JSON.stringify({ title, streamUrl, headers, subtitleUrl }));
+        // console.log(JSON.parse(result));
         return result;
 
     } catch (error) {
