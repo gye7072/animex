@@ -349,50 +349,50 @@ class Anilist {
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 
-// (async() => {
-//     const results = await searchResults('Crest of Stars');
-//     const href = JSON.parse(results)[0].href;
-//     console.log("HREF:", href);
+(async() => {
+    const results = await searchResults('Crest of Stars');
+    const href = JSON.parse(results)[0].href;
+    console.log("HREF:", href);
  
-//     const episodes = await extractEpisodes(href);
-//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
-//     console.log("EPISODE HREF:", firstEpisodeHref);
+    const episodes = await extractEpisodes(href);
+    const firstEpisodeHref = JSON.parse(episodes)[5].href;
+    console.log("EPISODE HREF:", firstEpisodeHref);
  
-//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
-//     const parsed = JSON.parse(streamUrl);
-//     const streams = parsed.streams;
-//     const subtitles = parsed.subtitles;
+    const streamUrl = await extractStreamUrl(firstEpisodeHref);
+    const parsed = JSON.parse(streamUrl);
+    const streams = parsed.streams;
+    const subtitles = parsed.subtitles;
  
-//     console.log("\n===== STREAMS =====");
-//     streams.forEach(s => {
-//         const subUrl = s.subtitleUrl || subtitles || null;
-//         const refHeader = s.headers?.Referer || "https://animex.one";
-//         const originHeader = s.headers?.Origin || "https://animex.one";
-//         const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
+    console.log("\n===== STREAMS =====");
+    streams.forEach(s => {
+        const subUrl = s.subtitleUrl || subtitles || null;
+        const refHeader = s.headers?.Referer || "https://animex.one";
+        const originHeader = s.headers?.Origin || "https://animex.one";
+        const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
 
-//         console.log(`\n[${s.title}]`);
-//         console.log(`\n# 1. Download video:`);
-//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
-//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+        console.log(`\n[${s.title}]`);
+        console.log(`\n# 1. Download video:`);
+        console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
+        console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
-//         console.log(`\n# 2. Download subtitles separately:`);
-//         if (s.subtitleUrl) {
-//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-//         } else {
-//             console.log(`# No subtitles available for this stream`);
-//         }
+        console.log(`\n# 2. Download subtitles separately:`);
+        if (s.subtitleUrl) {
+            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+        } else {
+            console.log(`# No subtitles available for this stream`);
+        }
 
-//         console.log(`\n# 3. Merge video + subtitles:`);
-//         if (subUrl) {
-//             console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-//         } else {
-//             console.log(`# Skip merge — no subs`);
-//         }
-//     });
+        console.log(`\n# 3. Merge video + subtitles:`);
+        if (subUrl) {
+            console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+        } else {
+            console.log(`# Skip merge — no subs`);
+        }
+    });
  
-//     console.log("\n===== SUBTITLES =====");
-//     console.log(subtitles || "No subtitles found");
-// })();
+    console.log("\n===== SUBTITLES =====");
+    console.log(subtitles || "No subtitles found");
+})();
 
 // ***** LOCAL TESTING
 
@@ -621,13 +621,13 @@ async function extractEpisodes(url) {
 
 function slugify(title) {
     return title
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
+      .toLowerCase() //lowercase
+      .normalize("NFKD") //breaks accented letters into base letters + accent marks
+      .replace(/[\u0300-\u036f]/g, "") //remove accent marks
+      .replace(/[^a-z0-9\s-]/g, "") //remove invalid chars
+      .trim() //remove whitespace
+      .replace(/\s+/g, "-") //replace spaces with hyphens
+      .replace(/-+/g, "-"); //if repeated hyphens, reduce to one
 }
 
 function rewriteMochiCdn(url) {
@@ -664,6 +664,7 @@ async function extractStreamUrl(url) {
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
 
         const CDN_PREFERRED_HOSTS = [
+            '1oe.',
             'cdn.',
             'zaza.',
         ];
@@ -846,6 +847,7 @@ async function extractStreamUrl(url) {
 
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
         console.log(JSON.parse(result));
+        console.log(result);
         return result;
 
     } catch (error) {
