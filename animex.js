@@ -375,7 +375,7 @@ class Anilist {
 //         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
 //         console.log(`\n# 2. Download subtitles separately:`);
-//         if (subUrl) {
+//         if (s.subtitleUrl) {
 //             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
 //         } else {
 //             console.log(`# No subtitles available for this stream`);
