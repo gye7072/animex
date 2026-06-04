@@ -348,57 +348,57 @@ class Anilist {
 
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
-(async() => {
-    const results = await searchResults('Crest of Stars');
-    const href = JSON.parse(results)[0].href;
-    console.log("HREF:", href);
+// (async() => {
+//     const results = await searchResults('Crest of Stars');
+//     const href = JSON.parse(results)[0].href;
+//     console.log("HREF:", href);
 
-    const episodes = await extractEpisodes(href);
-    const firstEpisodeHref = JSON.parse(episodes)[5].href;
-    console.log("EPISODE HREF:", firstEpisodeHref);
+//     const episodes = await extractEpisodes(href);
+//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
+//     console.log("EPISODE HREF:", firstEpisodeHref);
 
-    const streamUrl = await extractStreamUrl(firstEpisodeHref);
-    const parsed = JSON.parse(streamUrl);
-    const sources = parsed.sources;
-    const subtitles = parsed.subtitles;
-    const bestSubtitleUrl = subtitles?.[0]?.url || null;
+//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
+//     const parsed = JSON.parse(streamUrl);
+//     const sources = parsed.sources;
+//     const subtitles = parsed.subtitles;
+//     const bestSubtitleUrl = subtitles?.[0]?.url || null;
 
-    console.log("\n===== SOURCES =====");
-    sources.forEach(s => {
-        const subUrl = bestSubtitleUrl;
-        const refHeader = s.headers?.Referer || s.headers?.referer || "https://animex.one";
+//     console.log("\n===== SOURCES =====");
+//     sources.forEach(s => {
+//         const subUrl = bestSubtitleUrl;
+//         const refHeader = s.headers?.Referer || s.headers?.referer || "https://animex.one";
 
-        console.log(`\n[${s.quality}]`);
-        console.log(`URL: ${s.url}`);
-        console.log(`isM3U8: ${s.isM3U8}`);
-        console.log(`Headers: ${JSON.stringify(s.headers)}`);
+//         console.log(`\n[${s.quality}]`);
+//         console.log(`URL: ${s.url}`);
+//         console.log(`isM3U8: ${s.isM3U8}`);
+//         console.log(`Headers: ${JSON.stringify(s.headers)}`);
 
-        console.log(`\n# 1. Download video:`);
-        if (s.isM3U8) {
-            console.log(`python -m yt_dlp --add-header "Referer:${refHeader}" --add-header "Origin:https://animex.one" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --downloader ffmpeg --hls-use-mpegts -o "output.mp4" "${s.url}"`);
-        } else {
-            console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.url}"`);
-            console.log(`python -m yt_dlp --add-header "Referer:${refHeader}" --add-header "Origin:https://animex.one" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.url}"`);
-        }
+//         console.log(`\n# 1. Download video:`);
+//         if (s.isM3U8) {
+//             console.log(`python -m yt_dlp --add-header "Referer:${refHeader}" --add-header "Origin:https://animex.one" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --downloader ffmpeg --hls-use-mpegts -o "output.mp4" "${s.url}"`);
+//         } else {
+//             console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.url}"`);
+//             console.log(`python -m yt_dlp --add-header "Referer:${refHeader}" --add-header "Origin:https://animex.one" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.url}"`);
+//         }
 
-        console.log(`\n# 2. Download subtitles separately:`);
-        if (subUrl) {
-            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-        } else {
-            console.log(`# No subtitles available`);
-        }
+//         console.log(`\n# 2. Download subtitles separately:`);
+//         if (subUrl) {
+//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+//         } else {
+//             console.log(`# No subtitles available`);
+//         }
 
-        console.log(`\n# 3. Merge video + subtitles:`);
-        console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-    });
+//         console.log(`\n# 3. Merge video + subtitles:`);
+//         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//     });
 
-    console.log("\n===== SUBTITLES =====");
-    if (subtitles && subtitles.length > 0) {
-        subtitles.forEach(s => console.log(`[${s.lang}] ${s.url}`));
-    } else {
-        console.log("No subtitles found");
-    }
-})();
+//     console.log("\n===== SUBTITLES =====");
+//     if (subtitles && subtitles.length > 0) {
+//         subtitles.forEach(s => console.log(`[${s.lang}] ${s.url}`));
+//     } else {
+//         console.log("No subtitles found");
+//     }
+// })();
 
 // ***** LOCAL TESTING
 
