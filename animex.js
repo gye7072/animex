@@ -759,24 +759,33 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
 
-            // Safely extract Referer and Origin
+            // Safely extract Referer and Origin — try all casing variants
             const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
                 || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
-                || "https://animex.one";
+                || null;  // ← do NOT default here yet
 
             const origin = (typeof apiHeaders.Origin === 'string' ? apiHeaders.Origin : null)
                 || (typeof apiHeaders.origin === 'string' ? apiHeaders.origin : null)
-                || "https://animex.one";
+                || null;
+
+            // Log exactly what the API gave us so we can debug
+            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders));
 
             const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
+            // Derive origin from referer if missing, or from streamUrl host as last resort
+            const streamHost = "https://" + resolvedUrl.split('/')[2];
+            const finalReferer = referer || streamHost + "/";
+            const finalOrigin  = origin  || streamHost;
+
             const headers = {
-                "Referer": referer,
-                "Origin": origin,
+                "Referer":    finalReferer,
+                "Origin":     finalOrigin,
                 "User-Agent": userAgent,
             };
 
-            console.log("[extractStreamUrl] Headers for " + providerId + ": " + JSON.stringify(headers));
+            console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
+
 
             // Attempt to rewrite .jpg-segment HLS manifests
             const streamUrl = await resolveStreamUrl(resolvedUrl, headers);
