@@ -862,7 +862,7 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
             options.headers ?? {},
             options.method ?? 'GET',
             options.body ?? null,
-            true,
+            false,  // ← was true, caused "[Error] Redirect value is true"
             options.encoding ?? 'utf-8'
         );
     } catch(e) {
