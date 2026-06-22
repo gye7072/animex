@@ -916,7 +916,7 @@ async function extractStreamUrl(url) {
             "Referer": domainUrl,
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate",
+            // "Accept-Encoding": "gzip, deflate",
             // Note: User-Agent is set internally by AmxBotInterceptor on every
             // call (pinned to whatever UA it warmed up with) — don't override
             // it here, since the _amx_id token is bound to that exact UA.
