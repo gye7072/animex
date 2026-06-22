@@ -689,8 +689,6 @@ class Anilist {
 	        }
 	    }
 	}
-
-
     
 // ***** LOCAL TESTING
 

@@ -8,62 +8,6 @@
 // git commit -m "remove setTimeout rate limiter"
 // git push
 
-
-
-
-function sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-// ─── Rate‑limiter for all animex.one requests ───
-// Strategy: burst optimistically up to a generous per‑minute ceiling, and only
-// slow down REACTIVELY when the server actually returns 429 (see below). The
-// ceiling is just a safety cap against runaway loops — the real protection is
-// the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
-// ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
-// several episodes per minute.
-const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
-const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
-const ANIMEX_MAX_429_RETRIES = 3;
-let animexRequestTimes = [];
-let animexAdmission = Promise.resolve();
-
-async function animexFetch(url, options = {}, attempt = 0) {
-    // Serialize only the admission decision so parallel callers don't grab the
-    // same slot; the actual network requests still run concurrently.
-    const ticket = animexAdmission.then(() => animexReserveSlot());
-    animexAdmission = ticket.catch(() => {});
-    await ticket;
-
-    const response = await soraFetch(url, options);
-
-    // Reactive backoff: respect the server's own throttle if (and only if) it
-    // actually pushes back, instead of crawling preemptively.
-    if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
-        const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
-        const waitMs = retryAfter * 1000 + 250;
-        console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
-        await sleep(waitMs);
-        return animexFetch(url, options, attempt + 1);
-    }
-
-    return response;
-}
-
-async function animexReserveSlot() {
-    const now = Date.now();
-    // Forget timestamps that have aged out of the rolling window.
-    animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
-
-    if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
-        const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
-        console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
-        await sleep(waitTime);
-        return animexReserveSlot();
-    }
-
-    animexRequestTimes.push(Date.now());
-}
 	
 
 class Anilist {
@@ -430,58 +374,116 @@ class Anilist {
 
 
 
+function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+// ─── Rate‑limiter for all animex.one requests ───
+// Strategy: burst optimistically up to a generous per‑minute ceiling, and only
+// slow down REACTIVELY when the server actually returns 429 (see below). The
+// ceiling is just a safety cap against runaway loops — the real protection is
+// the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
+// ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
+// several episodes per minute.
+const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
+const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
+const ANIMEX_MAX_429_RETRIES = 3;
+let animexRequestTimes = [];
+let animexAdmission = Promise.resolve();
+
+async function animexFetch(url, options = {}, attempt = 0) {
+    // Serialize only the admission decision so parallel callers don't grab the
+    // same slot; the actual network requests still run concurrently.
+    const ticket = animexAdmission.then(() => animexReserveSlot());
+    animexAdmission = ticket.catch(() => {});
+    await ticket;
+
+    const response = await soraFetch(url, options);
+
+    // Reactive backoff: respect the server's own throttle if (and only if) it
+    // actually pushes back, instead of crawling preemptively.
+    if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
+        const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
+        const waitMs = retryAfter * 1000 + 250;
+        console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
+        await sleep(waitMs);
+        return animexFetch(url, options, attempt + 1);
+    }
+
+    return response;
+}
+
+async function animexReserveSlot() {
+    const now = Date.now();
+    // Forget timestamps that have aged out of the rolling window.
+    animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
+
+    if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
+        const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
+        console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
+        await sleep(waitTime);
+        return animexReserveSlot();
+    }
+
+    animexRequestTimes.push(Date.now());
+}
+
+
+
+
+
 // ***** LOCAL TESTING
 
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 
-(async() => {
-    const results = await searchResults('Crest of Stars');
-    const href = JSON.parse(results)[0].href;
-    console.log("HREF:", href);
+// (async() => {
+//     const results = await searchResults('Crest of Stars');
+//     const href = JSON.parse(results)[0].href;
+//     console.log("HREF:", href);
 
-    const details = await extractDetails(href);
-    console.log("Details: ", details);
+//     const details = await extractDetails(href);
+//     console.log("Details: ", details);
  
-    const episodes = await extractEpisodes(href);
-    const firstEpisodeHref = JSON.parse(episodes)[5].href;
-    console.log("EPISODE HREF:", firstEpisodeHref);
+//     const episodes = await extractEpisodes(href);
+//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
+//     console.log("EPISODE HREF:", firstEpisodeHref);
  
-    const streamUrl = await extractStreamUrl(firstEpisodeHref);
-    const parsed = JSON.parse(streamUrl);
-    const streams = parsed.streams;
-    const subtitles = parsed.subtitles;
+//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
+//     const parsed = JSON.parse(streamUrl);
+//     const streams = parsed.streams;
+//     const subtitles = parsed.subtitles;
  
-    console.log("\n===== STREAMS =====");
-    streams.forEach(s => {
-        const subUrl = s.subtitleUrl || subtitles || null;
-        const refHeader = s.headers?.Referer || "https://animex.one";
-        const originHeader = s.headers?.Origin || "https://animex.one";
-        const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
+//     console.log("\n===== STREAMS =====");
+//     streams.forEach(s => {
+//         const subUrl = s.subtitleUrl || subtitles || null;
+//         const refHeader = s.headers?.Referer || "https://animex.one";
+//         const originHeader = s.headers?.Origin || "https://animex.one";
+//         const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
 
-        console.log(`\n[${s.title}]`);
-        console.log(`\n# 1. Download video:`);
-        console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
-        console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+//         console.log(`\n[${s.title}]`);
+//         console.log(`\n# 1. Download video:`);
+//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
+//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
-        console.log(`\n# 2. Download subtitles separately:`);
-        if (s.subtitleUrl) {
-            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-        } else {
-            console.log(`# No subtitles available for this stream`);
-        }
+//         console.log(`\n# 2. Download subtitles separately:`);
+//         if (s.subtitleUrl) {
+//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+//         } else {
+//             console.log(`# No subtitles available for this stream`);
+//         }
 
-        console.log(`\n# 3. Merge video + subtitles:`);
-        if (subUrl) {
-            console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-        } else {
-            console.log(`# Skip merge — no subs`);
-        }
-    });
+//         console.log(`\n# 3. Merge video + subtitles:`);
+//         if (subUrl) {
+//             console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//         } else {
+//             console.log(`# Skip merge — no subs`);
+//         }
+//     });
  
-    console.log("\n===== SUBTITLES =====");
-    console.log(subtitles || "No subtitles found");
-})();
+//     console.log("\n===== SUBTITLES =====");
+//     console.log(subtitles || "No subtitles found");
+// })();
 
 // ***** LOCAL TESTING
 
@@ -1071,87 +1073,87 @@ async function extractStreamUrl(url) {
 }
 
 
-// ─── SoraFetch (fallback wrapper, unchanged) ───
-async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
-    try {
-        return await fetchv2(
-            url,
-            options.headers ?? {},
-            options.method ?? 'GET',
-            options.body ?? null,
-            true,
-            options.encoding ?? 'utf-8'
-        );
-        //returns status, headers, body
-    } catch(e) {
-        try {
-            return await fetch(url, options);
-        } catch(error) {
-            return null;
-        }
-    }
-}
+// // ─── SoraFetch (fallback wrapper, unchanged) ───
+// async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
+//     try {
+//         return await fetchv2(
+//             url,
+//             options.headers ?? {},
+//             options.method ?? 'GET',
+//             options.body ?? null,
+//             true,
+//             options.encoding ?? 'utf-8'
+//         );
+//         //returns status, headers, body
+//     } catch(e) {
+//         try {
+//             return await fetch(url, options);
+//         } catch(error) {
+//             return null;
+//         }
+//     }
+// }
 
 
-async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
-    const processedBody = (method !== "GET" && body && typeof body === 'object') 
-        ? JSON.stringify(body)
-        : (method !== "GET" ? body : null); //GET request should not have a body
+// async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
+//     const processedBody = (method !== "GET" && body && typeof body === 'object') 
+//         ? JSON.stringify(body)
+//         : (method !== "GET" ? body : null); //GET request should not have a body
 
-    const options = {
-        method,
-        headers,
-        body: processedBody,
-        redirect: redirect ? 'follow' : 'manual', 
-		//follow: atuomatically follows HTTP redirects
-		//manual: don't follow them, you'll handle it
-    };
+//     const options = {
+//         method,
+//         headers,
+//         body: processedBody,
+//         redirect: redirect ? 'follow' : 'manual', 
+// 		//follow: atuomatically follows HTTP redirects
+// 		//manual: don't follow them, you'll handle it
+//     };
 
-    try {
-        const response = await fetch(url, options);
-		//sends the HTTP request
-		//waits for the fetch() promise to resolve
-		//contains metadata about the HTTP response
+//     try {
+//         const response = await fetch(url, options);
+// 		//sends the HTTP request
+// 		//waits for the fetch() promise to resolve
+// 		//contains metadata about the HTTP response
 
-        const rawBuffer = await response.arrayBuffer();
-		//reads the response body as binary data
-		//useful when the response is not plain text (like files, images, etc)
+//         const rawBuffer = await response.arrayBuffer();
+// 		//reads the response body as binary data
+// 		//useful when the response is not plain text (like files, images, etc)
 
-        const decoder = new TextDecoder(encoding || "utf-8");
-		//converts an ArrayBuffer string using specified encoding 
-		//if no encoding is specified it will use "utf-8"
+//         const decoder = new TextDecoder(encoding || "utf-8");
+// 		//converts an ArrayBuffer string using specified encoding 
+// 		//if no encoding is specified it will use "utf-8"
 
-        const decodedText = decoder.decode(rawBuffer);
-		//raw response body text
-		//Example: '{"success":true,"data":[1,2,3]}'
+//         const decodedText = decoder.decode(rawBuffer);
+// 		//raw response body text
+// 		//Example: '{"success":true,"data":[1,2,3]}'
 
-        const result = {
-            headers: Object.fromEntries(response.headers.entries()),
-			//response.headers.entries() gives an iterator of key-value pairs
-			//Object.fromEntries converts it to a plain object
-			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
+//         const result = {
+//             headers: Object.fromEntries(response.headers.entries()),
+// 			//response.headers.entries() gives an iterator of key-value pairs
+// 			//Object.fromEntries converts it to a plain object
+// 			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
 
-            status: response.status,
-			//HTTP status code
-            _data: decodedText,
-            text: function () {
-                return Promise.resolve(this._data);
-            },
-			//returns a promise that resolves to a string
+//             status: response.status,
+// 			//HTTP status code
+//             _data: decodedText,
+//             text: function () {
+//                 return Promise.resolve(this._data);
+//             },
+// 			//returns a promise that resolves to a string
 
-            json: function () {
-                try {
-                    return Promise.resolve(JSON.parse(this._data));
-                } catch (e) {
-                    return Promise.reject("JSON parse error: " + e.message);
-                }
-            }
-        };
+//             json: function () {
+//                 try {
+//                     return Promise.resolve(JSON.parse(this._data));
+//                 } catch (e) {
+//                     return Promise.reject("JSON parse error: " + e.message);
+//                 }
+//             }
+//         };
 
-        return result;
+//         return result;
 
-    } catch (err) {
-        return Promise.reject(err.message || "Unknown error");
-    }
-}
+//     } catch (err) {
+//         return Promise.reject(err.message || "Unknown error");
+//     }
+// }
  
