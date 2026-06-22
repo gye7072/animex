@@ -9,8 +9,6 @@
 // git push
 
 
-
-
 function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -723,347 +721,269 @@ function rewriteMochiCdn(url) {
 }
 
 
- 
-
-// ─── _amx_id bot-detection bypass ──────────────────────────────────────────
-// The token is bound to (ip, ua) at issuance time, so this interceptor:
-//   1. Pins ONE User-Agent for its entire lifetime and uses it on every
-//      request — including the warm-up.
-//   2. Warms up by hitting the human-facing watch page first (the page a
-//      real browser would load before any /rest/api/* call), to receive
-//      the `_amx_id` cookie under realistic conditions.
-//   3. Stores and resends every cookie set by the server (not just
-//      `_amx_id`) on subsequent requests to the same origin.
-class AmxBotInterceptor {
-    constructor(userAgent) {
-        this.cookieStore = {};
-        // Pin a single UA for the whole session since _amx_id embeds it.
-        this.userAgent = userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0";
-        this.warmedUp = false;
-    }
- 
-    // Call once per slug/episode session before hitting /rest/api/*.
-    // domainUrl should be the human-facing watch page, e.g.
-    // https://animex.one/watch/crest-of-the-stars-290-episode-6
-    async warmUp(domainUrl) {
-        if (this.warmedUp) return;
-        console.log("[Amx] Warming up via watch page: " + domainUrl);
- 
-        const resp = await this.fetchWithCookies(domainUrl, {
-            headers: {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-        });
- 
-        if (resp && this.cookieStore["_amx_id"]) {
-            console.log("[Amx] Warm-up succeeded, _amx_id acquired.");
-        } else {
-            console.log("[Amx] Warm-up did not yield an _amx_id cookie (status " + resp?.status + "). Continuing anyway — API calls may still be flagged.");
-        }
- 
-        this.warmedUp = true;
-    }
- 
-    async fetchWithBypass(url, options = {}) {
-        let response = await this.fetchWithCookies(url, options);
- 
-        if (!this.looksBotBlocked(response)) {
-            return response;
-        }
- 
-        console.log("[Amx] bot_detected on " + url + " — _amx_id missing/stale or IP+UA mismatch.");
- 
-        // If we never warmed up (or our cookie is stale), try a fresh
-        // warm-up against this same origin and retry once.
-        const originMatch = url.match(/^(https?:\/\/[^\/]+)/);
-        if (originMatch) {
-            await this.fetchWithCookies(originMatch[1] + "/", {});
-            if (this.cookieStore["_amx_id"]) {
-                console.log("[Amx] Retrying original request with refreshed _amx_id...");
-                return this.fetchWithCookies(url, options);
-            }
-        }
- 
-        console.log("[Amx] Could not acquire a valid _amx_id — request will likely keep failing. " +
-                     "If this persists even with a fresh cookie, the block is probably TLS/JA3 fingerprinting " +
-                     "at the Cloudflare layer, which requires a server-side client with a real-browser TLS " +
-                     "signature (e.g. curl-impersonate) rather than fetch().");
-        return response;
-    }
- 
-    async fetchWithCookies(url, options) {
-        const cookieHeader = this.getCookieHeader();
-        const headers = { ...(options.headers || {}) };
-        headers["User-Agent"] = this.userAgent; // always pinned, never overridden per-call
-        if (cookieHeader) headers.Cookie = cookieHeader;
- 
-        const response = await animexFetch(url, { ...options, headers });
-        if (!response) return response;
- 
-        try {
-            const setCookie = response.headers?.["set-cookie"] || response.headers?.["Set-Cookie"];
-            if (setCookie) this.storeCookies(setCookie);
-        } catch (e) {}
- 
-        return response;
-    }
- 
-    looksBotBlocked(response) {
-        if (!response) return true;
-        if (response.status !== 403) return false;
-        const body = response._data || "";
-        // Specifically the origin app's bot_detected error, not a generic 403.
-        return body.includes('bot_detected');
-    }
- 
-    storeCookies(setCookieString) {
-        const cookies = Array.isArray(setCookieString) ? setCookieString : [setCookieString];
-        cookies.forEach(c => {
-            const [kv] = c.split(";");
-            const [key, value] = kv.split("=");
-            if (key) this.cookieStore[key.trim()] = value?.trim() || "";
-        });
-    }
- 
-    getCookieHeader() {
-        return Object.entries(this.cookieStore)
-            .map(([k, v]) => `${k}=${v}`)
-            .join("; ");
-    }
-}
- 
-function rewriteMochiCdn(url) {
-    try {
-        if (url.includes("tools.fast4speed.rsvp/media6/")) {
-            return url.replace(
-                "tools.fast4speed.rsvp/media6/",
-                "mp4.24stream.xyz/storage/media6/"
-            );
-        }
-        return url;
-    } catch (e) {
-        console.log("[rewriteMochiCdn] error: " + e);
-        return url;
-    }
-}
- 
-// ─── Extract Stream URL ─────────────────────────────────────────────────────
+// ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
-        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); // captures anime/290/crest-of-the-stars-vee16/6
+        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); //captures anime/290/crest-of-the-stars-vee16/6
         if (!match) throw new Error('Invalid URL format');
- 
-        const id = match[1];             // 290
-        const slug = match[2];           // crest-of-the-stars-vee16
-        const episodeNumber = match[3];  // 6
-        const name = slug.replace(/-[^-]+$/, ''); // crest-of-the-stars (drop trailing provider suffix)
- 
+
+        const id = match[1]; //290
+        const slug = match[2]; //crest-of-the-stars-vee16
+        const episodeNumber = match[3]; //6
+        const name = slug.replace(/-[^-]+$/, ''); // crest-of-the-stars
+
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
- 
+
         const CDN_PREFERRED_HOSTS = [
             'cdn.',
             'zaza.',
         ];
- 
+
+        //returns idex of CDN_PREFERRED_HOSTS if the url contains it
         function getCdnPriority(u) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
                 if (u.includes(CDN_PREFERRED_HOSTS[i])) return i;
             }
             return CDN_PREFERRED_HOSTS.length;
         }
- 
+
+        //copies the urls array 
+        //assigns priority between the urls
+        //lower is better
+        //returns the lowest/the first/the best one
         function getBestSubtitleUrl(urls) {
             if (!urls || urls.length === 0) return null;
             return [...urls].sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0];
         }
- 
+
+
         // ─── Rewrite JPG-segment HLS playlists ──────────────────────────────
         async function resolveStreamUrl(rawUrl, headers) {
+            //only processes HLS/.m3u8 files
             if (!rawUrl.includes('.m3u8')) return rawUrl;
- 
+
             try {
                 const resp = await animexFetch(rawUrl, { headers });
                 if (!resp || resp.status !== 200) return rawUrl;
- 
+
+                //downloads the actual .m3u8 file content as txt
                 const text = await resp.text();
- 
+                //^ at the start of a line, must not start with # (skips comment lines)
+                //one or more non-whitespace characters
+                //.jpg 
+                ///m is multiline flag; matches start of each line
+                //.test() runs the regex against a string and returns T/F
+                //Example image.jpg
+
+
+                //no rewrite needed
                 const hasJpgSegments = /^(?!#)[^\s]+\.jpg/m.test(text);
                 if (!hasJpgSegments) {
                     console.log("[resolveStreamUrl] Standard HLS, no rewrite needed for: " + rawUrl);
                     return rawUrl;
                 }
- 
+
                 console.log("[resolveStreamUrl] Detected .jpg-segment HLS, rewriting manifest...");
- 
+
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8 =>
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0
                 const base = rawUrl.substring(0, rawUrl.lastIndexOf('/') + 1);
- 
+
+                //for eeach matched .jpg path
+                //if it starts with http leave it alone
+                //otherwise prepend 'base' to it
+                //photo.jpg
+                //=> https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/photo.jpg
                 const rewritten = text.replace(
                     /^(?!#)([^\s]+\.jpg)/gm,
                     (seg) => (seg.startsWith('http') ? seg : base + seg)
                 );
- 
+
+                //converts the rewritten text into a base64 data URL
                 const encoded = btoa(unescape(encodeURIComponent(rewritten)));
                 return `data:application/vnd.apple.mpegurl;base64,${encoded}`;
- 
+
             } catch (e) {
                 console.warn("[resolveStreamUrl] Manifest rewrite failed, falling back: " + e);
                 return rawUrl;
             }
         }
- 
-        const amx = new AmxBotInterceptor(); // pins its own default UA internally
- 
-        // Warm up against the human-facing watch page first — this is what
-        // issues the `_amx_id` cookie under realistic conditions, before we
-        // ever touch the /rest/api/* endpoints.
-        const domainUrl = `https://animex.one/watch/${name}-${id}-episode-${episodeNumber}`;
-        await amx.warmUp(domainUrl);
- 
+
         // 1. Fetch available servers
+
+        //https://animex.one/watch/crest-of-the-stars-290-episode-6
+        const domainUrl = `https://animex.one/watch/${name}-${id}-episode-${episodeNumber}`;
+
+        //https://pp.animex.one/rest/api/servers?id=crest-of-the-stars-vee16&epNum=6
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
- 
-        const baseHeaders = {
-            "Host": "pp.animex.one",
-            "Origin": "https://animex.one",
-            "Referer": domainUrl,
+
+
+        console.log("[extractStreamUrl] Domain URL: " + domainUrl);
+        const headers = {
+            "Host": "pp.animex.one", 
+            "Origin": "https://animex.one", 
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate",
-            // Note: User-Agent is set internally by AmxBotInterceptor on every
-            // call (pinned to whatever UA it warmed up with) — don't override
-            // it here, since the _amx_id token is bound to that exact UA.
-        };
- 
-        let serversResp = await amx.fetchWithBypass(serversUrl, { headers: baseHeaders });
- 
-        if (!serversResp || serversResp.status !== 200) {
-            console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: null });
         }
- 
-        const serversData = await serversResp.json();
+        const serversRsp = await runPythonScript('./cookie_generator.py', [domainUrl, serversUrl, JSON.stringify(headers)]);
+        const serversData = JSON.parse(serversRsp);
+        console.log(serversData);
+
+        // const serversResp = await animexFetch(serversUrl, headers);
+
+        // if (!serversResp || serversResp.status !== 200) {
+        //     console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
+        //     return JSON.stringify({ streams: [], subtitles: null });
+        // }
+
+        // const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
- 
+
         console.log("[extractStreamUrl] Sub providers: " + JSON.stringify(subProviders.map(p => p.id)));
         console.log("[extractStreamUrl] Dub providers: " + JSON.stringify(dubProviders.map(p => p.id)));
- 
+
         async function fetchProviderStream(provider, type) {
             const providerId = provider.id;
+            //https://pp.animex.one/rest/api/sources?id=crest-of-the-stars-vee16&epNum=6&type=sub&providerId=yuki
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
- 
-            const sourcesResp = await amx.fetchWithBypass(sourcesUrl, { headers: baseHeaders });
-            if (!sourcesResp || sourcesResp.status !== 200) {
-                console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
-                return null;
+
+
+            console.log("[extractStreamUrl] Domain URL: " + domainUrl);
+            const reqHeaders = {
+                "Host": "pp.animex.one", 
+                "Origin": "https://animex.one", 
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
             }
- 
-            const sourcesData = await sourcesResp.json();
+            const sourcesResp = await runPythonScript('./cookie_generator.py', [domainUrl, sourcesUrl, JSON.stringify(reqHeaders)]);
+            const sourcesData = JSON.parse(sourcesResp);
+            console.log(sourcesData);
+
+            // const sourcesResp = await animexFetch(sourcesUrl);
+            // if (!sourcesResp || sourcesResp.status !== 200) {
+            //     console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
+            //     return null;
+            // }
+
+            // const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
             }
- 
-            const source = sourcesData.sources[0];
+
+            const source = sourcesData.sources[0]; 
             const apiHeaders = sourcesData.headers || {};
- 
-            const rawUrl = source.url;
+
+            const rawUrl = source.url; ////"https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8"
             const isMochi = providerId.toLowerCase() === "mochi";
-            const resolvedUrl = isMochi && typeof rewriteMochiCdn === 'function'
-                ? rewriteMochiCdn(rawUrl)
-                : rawUrl;
- 
+            const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
+
             if (resolvedUrl !== rawUrl) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
- 
-            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders));
- 
-            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
+
+            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders)); //"Referer":"https://megaplay.buzz/"}
+
+
+            //https://megaplay.buzz/
+            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null) 
                 || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
                 || null;
- 
+
             const origin = (typeof apiHeaders.Origin === 'string' ? apiHeaders.Origin : null)
                 || (typeof apiHeaders.origin === 'string' ? apiHeaders.origin : null)
                 || null;
- 
+
             const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
- 
+
             const finalReferer = referer || "https://animex.one/";
-            const finalOrigin = origin || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
- 
+            const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
+
             const outHeaders = {
-                "Referer": finalReferer,
-                "Origin": finalOrigin,
-                "User-Agent": userAgent,
+                "Referer":    finalReferer, //https://megaplay.buzz/
+                "Origin":     finalOrigin, //https://animex.one
+                "User-Agent": userAgent,   //Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1
             };
- 
+
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(outHeaders));
- 
+
             // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
             const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
             const streamUrl = isDirectMp4
                 ? resolvedUrl
-                : await resolveStreamUrl(resolvedUrl, outHeaders);
- 
+                : await resolveStreamUrl(resolvedUrl, headers);
+
             if (isDirectMp4) {
                 console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
             }
- 
+
+            // Use track kind to determine if subtitle exists — let the API decide,
+            // not the provider name. If tracks exist and are captions/subtitles, use them.
             const rawTracks = (sourcesData.tracks || [])
                 .filter(t => t.url && (t.kind === "captions" || t.kind === "subtitles"))
                 .map(t => t.url);
- 
+            //"https://1oe.lostproject.club/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/subtitles/eng-2.vtt"
+
             const subtitleUrl = rawTracks.length > 0
                 ? getBestSubtitleUrl(rawTracks)
                 : null;
- 
+            
+
             if (subtitleUrl) {
                 console.log("[extractStreamUrl] Subtitle for " + providerId + ": " + subtitleUrl);
             } else {
                 console.log("[extractStreamUrl] No subtitle tracks for " + providerId);
             }
- 
-            const tip = provider.tip ? ` (${provider.tip})` : '';
-            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
- 
-            return { title, streamUrl, headers: outHeaders, subtitleUrl };
+
+            const tip = provider.tip ? ` (${provider.tip})` : '';                //"Soft sub, Good, Multi quality"
+            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;     //'YUKI - SUB (Soft sub, Good, Multi quality)'
+
+            return { title, streamUrl, headers, subtitleUrl };
         }
- 
+
         const streams = [];
- 
+
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
             if (stream) streams.push(stream);
         }
- 
+
         for (const provider of dubProviders) {
             const stream = await fetchProviderStream(provider, 'dub');
             if (stream) streams.push(stream);
         }
- 
+
+        // Best subtitle across all streams that have one
         const allSubtitleUrls = streams.map(s => s.subtitleUrl).filter(Boolean);
         const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
- 
+
+        // Keep each stream's own subtitleUrl — don't override with global best
+        // so hard sub streams that have no tracks stay null
         const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
             ...rest,
             subtitleUrl: subtitleUrl || null
         }));
- 
+
         console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
         console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
- 
+
         const result = JSON.stringify({
             streams: cleanStreams,
             subtitles: bestSubtitle
         });
- 
+
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
+        console.log(JSON.parse(result));
+        console.log(result);
         return result;
- 
+
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
         return JSON.stringify({ streams: [], subtitles: null });
@@ -1155,3 +1075,39 @@ async function fetchv2(url, headers = {}, method = "GET", body = null, redirect 
     }
 }
  
+const { spawn } = require('child_process');
+
+function runPythonScript(scriptPath, args = []) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python', [scriptPath, ...args]);
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`Python exited with code ${code}: ${stderr}`));
+      }
+
+      const result = stdout.trim();
+
+      if (!result) {
+        return reject(new Error(`Python script produced no output. stderr: ${stderr}`));
+      }
+
+      resolve(result);
+    });
+
+    proc.on('error', (err) => reject(err));
+  });
+}
+
+// // usage
+// (async () => {
+//   const myString = "hello world";
+//   const number = await runPythonScript('./generate_number.py', [myString]);
+//   console.log('Got number:', number);
+// })();
