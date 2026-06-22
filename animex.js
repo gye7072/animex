@@ -10,7 +10,21 @@
 
 
 class Anilist {
+    //All methods inside are static meaning we can can call them directly on the class
+    //e.g. Anilist.search() without creating an instance
+
+    //takes a search keyword and optional filters object
     static async search(keyword, filters = {}) {
+    
+        //https://docs.anilist.co/guide/graphql/
+        //https://docs.anilist.co/guide/graphql/pagination (to get multiple objects)
+        //https://docs.anilist.co/reference/query
+
+        // Here we define our query as a multi-line string
+        // Storing it in a separate .graphql/.gql file is also possible
+
+        //query maps to a filter we can pass in
+        //media { } what gets returned per anime
         const query = `query (
                 $search: String,
                 $page: Int,
@@ -29,6 +43,7 @@ class Anilist {
                 $averageScore_greater: Int,
                 $averageScore_lesser: Int
             ) {
+                
                 Page(page: $page, perPage: $perPage) {
                 media(
                     search: $search,
@@ -83,7 +98,8 @@ class Anilist {
                 }
             }
         }`;
-
+        // Define our query variables and values that will be used in the query request
+        //the actual values passed into the query
         const variables = {
             "page": 1,
             "perPage": 50,
@@ -94,12 +110,17 @@ class Anilist {
             ],
             "search": keyword,
             "type": "ANIME",
-            ...filters
+            ...filters 
+            //spread operator unpacks an iterable into individual elements; if share the same key, the property placed last will override the previous ones
+            //...filters spreads any extra filters the caller provided, overriding defaults if keys conflict
         }
 
         return Anilist.anilistFetch(query, variables);
     }
 
+    //designed to fetch one specific anime by its "id" or "idMal"
+    //the query is hardcoded to page:1, perPage: 1 since we only want one result
+    //media is what gets returned
     static async lookup(filters) {
         const query = `query (
                 $id: Int,
@@ -156,17 +177,19 @@ class Anilist {
         return Anilist.anilistFetch(query, variables);
     }
 
+    //fetches all currently airing anime for the current season
+    //https://anilist.co/search/anime?year=2026&season=SPRING&airing%20status=RELEASING
     static async getLatest(filters) {
         let page = 0;
         let hasNextPage = true;
-        const perPage = 50;
+        const perPage = 50; //the API returns 50 results per page
         const currentDate = new Date();
 
-        filters.seasonYear = currentDate.getFullYear();
-        filters.season = Anilist.monthToSeason(currentDate.getMonth());
-
+        filters.seasonYear = currentDate.getFullYear(); //get current year
+        filters.season = Anilist.monthToSeason(currentDate.getMonth()); //get current season using current month
         const results = [];
 
+        //Each iteration fetches the next page
         do {
             page++;
 
@@ -240,15 +263,16 @@ class Anilist {
                 "status": "RELEASING",
                 ...filters
             }
-
             const fetchResults = await Anilist.anilistFetch(query, variables);
             results.push(fetchResults);
-
+            //if hasNextPage == false end loop
             if(fetchResults?.Page?.pageInfo?.hasNextPage !== true) {
                 hasNextPage = false;
             }
 
         } while(hasNextPage);
+
+        //Merge all pages into one single object (one page)
 
         const mergedObject = { Page: { media: []}};
 
@@ -276,8 +300,8 @@ class Anilist {
                 })
             });
 
-            if (response.status !== 200) {
-                if (response.status === 429) {
+            if (response.status !== 200) { //Not Ok
+                if (response.status === 429) { //Too many requests
                     console.info('=== RATE LIMIT EXCEEDED, SLEEPING AND RETRYING ===');
                     const retryTimeout = response.headers.get('Retry-After');
                     const timeout = Math.ceil((parseInt(retryTimeout))) * 1000 + extraTimeoutMs;
@@ -302,6 +326,7 @@ class Anilist {
         }
     }
 
+    //converts date format {year, month, day} to standard "YYYY-MM-DD" string
     static convertAnilistDateToDateStr(dateObject) {
         if (dateObject.year == null) {
             return null;
@@ -312,31 +337,35 @@ class Anilist {
         if (dateObject.day == null || parseInt(dateObject.day) < 1) {
             dateObject.day = 1;
         }
+
+        //ensures single-digit months/days get a leading zero
         return dateObject.year + "-" + (dateObject.month).toString().padStart(2, '0') + "-" + (dateObject.day).toString().padStart(2, '0');
     }
 
+    //Takes a Unix timestamp (seconds since 1970) and returns a human-readable countdown string.
     static nextAnilistAirDateToCountdown(timestamp) {
         if (timestamp == null) return null;
 
-        const airDate = new Date((timestamp * 1000));
+        const airDate = new Date((timestamp * 1000)); //Multiplies by 1000 because JS Date uses milliseconds but Unix timestamps are in seconds.
         const now = new Date();
 
         if (now > airDate) return null;
 
-        let [days, hourRemainder] = (((airDate - now) / 1000) / 60 / 60 / 24).toString().split('.');
+        let [days, hourRemainder] = (((airDate - now) / 1000) / 60 / 60 / 24).toString().split('.'); //Calculates the difference in days as a decimal (e.g. 2.75), then splits on . to get whole days and the fractional remainder separately.
         let [hours, minRemainder] = (parseFloat("0." + hourRemainder) * 24).toString().split('.');
         let minutes = Math.ceil((parseFloat("0." + minRemainder) * 60));
+
+        //Converts the hourRemainder to hours, then the minRemainder to minutes. Math.ceil rounds up so you never show 0 minutes.
 
         return `Next episode will air in ${days} days, ${hours} hours and ${minutes} minutes at ${airDate.getFullYear()}-${(airDate.getMonth() + 1).toString().padStart(2, '0')}-${(airDate.getDate()).toString().padStart(2, '0')} ${airDate.getHours()}:${airDate.getMinutes()}`;
     }
 
     static monthToSeason(month) {
-        const seasons = ['WINTER', 'SPRING', 'SUMMER', 'FALL'];
-        if(month == 11) return seasons[0];
-        if(month <= 1) return seasons[0];
-        if(month <= 4) return seasons[1];
-        if(month <= 7) return seasons[2];
-        return seasons[3];
+        // month is 0-indexed (0 = Jan, 11 = Dec)
+        if (month >= 0 && month <= 2) return "WINTER"; // Jan, Feb, Mar
+        if (month >= 3 && month <= 5) return "SPRING"; // Apr, May, Jun
+        if (month >= 6 && month <= 8) return "SUMMER"; // Jul, Aug, Sep
+        return "FALL";                                  // Oct, Nov, Dec
     }
 }
 
@@ -353,6 +382,9 @@ class Anilist {
 //     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
 //     console.log("HREF:", href);
+
+//     const details = await extractDetails(href);
+//     console.log("Details: ", details);
  
 //     const episodes = await extractEpisodes(href);
 //     const firstEpisodeHref = JSON.parse(episodes)[5].href;
@@ -421,6 +453,8 @@ async function animexFetch(url, options = {}) {
 // }
 
 // ─── AnimeX Search (now rate‑limited) ───
+//https://graphql.animex.one/graphql
+//FastSearch is just a semantic name
 async function searchAnimex(keyword, limit = 24) {
     limit = Math.min(24, Math.max(1, limit));
     console.log("[searchAnimex] Called with keyword: " + keyword + " limit: " + limit);
@@ -550,21 +584,21 @@ async function searchResults(keyword) {
 async function extractDetails(url) {
     try {
         if (url.includes('anime')) {
-            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/);
+            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/); //captures anime/290/crest-of-the-stars-vee16
             if (!match) throw new Error("Invalid URL format");
 
-            const anilistId = parseInt(match[1]);
+            const anilistId = parseInt(match[1]); //captures 290
 
             const aniData = await Anilist.lookup({ id: anilistId });
-            const anime = aniData.Page.media[0];
+            const anime = aniData.Page.media[0]; //the ONE result
 
             const cleanDescription = anime.description
-                ? anime.description.replace(/<[^>]+>/g, '').trim()
+                ? anime.description.replace(/<[^>]+>/g, '').trim() //removes all HTML tags (e.g <b> and </b>)
                 : 'No description available';
 
             const transformedResults = [{
                 description: cleanDescription,
-                aliases: `Duration: ${anime.episodes ? 24 + " minutes" : 'Unknown'}`,
+                aliases: `Duration: ${anime.episodes ? anime.episodes + " episodes" : 'Unknown'}`,
                 airdate: `Aired: ${anime.startDate.year ? Anilist.convertAnilistDateToDateStr(anime.startDate) : 'Unknown'}`
             }];
 
@@ -587,24 +621,28 @@ async function extractDetails(url) {
 async function extractEpisodes(url) {
     try {
         if(url.includes('anime')) {
-            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/);
+            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/); //captures anime/290/crest-of-the-stars-vee16
             if (!match) throw new Error("Invalid URL format");
 
-            const anilistId = parseInt(match[1]);
+            const anilistId = parseInt(match[1]); //captures 290
             const aniData = await Anilist.lookup({ id: anilistId });
             const anime = aniData.Page.media[0];
 
-            console.log(anime);
+            console.log("Anime: ", anime);
 
             if (!anime) return JSON.stringify([]);
 
             const episodesCount = anime.episodes || (anime.nextAiringEpisode?.episode - 1) || 1;
+            //13 || airing-1 || 1 (default)
             const episodesArray = [];
             for (let i = 1; i <= episodesCount; i++) {
                 episodesArray.push({
-                    href: `anime/${anilistId}/${match[2] || ''}/${i}`,
+                    href: `anime/${anilistId}/${match[2] || ''}/${i}`, 
+                   //anime/290/crest-of-the-stars-vee16/6 or anime/290/6
                     number: i,
+                    //episode 6
                     title: `Episode ${i}`
+                    //Episode 6
                 });
             }
 
@@ -655,11 +693,13 @@ function rewriteMochiCdn(url) {
 // ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
-        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
+        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); //captures anime/290/crest-of-the-stars-vee16/6
         if (!match) throw new Error('Invalid URL format');
 
-        const slug = match[2];
-        const episodeNumber = match[3];
+        const id = match[1]; //290
+        const slug = match[2]; //crest-of-the-stars-vee16
+        const episodeNumber = match[3]; //6
+        const name = slug.replace(/-[^-]+$/, ''); // crest-of-the-stars
 
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
 
@@ -668,6 +708,7 @@ async function extractStreamUrl(url) {
             'zaza.',
         ];
 
+        //returns idex of CDN_PREFERRED_HOSTS if the url contains it
         function getCdnPriority(u) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
                 if (u.includes(CDN_PREFERRED_HOSTS[i])) return i;
@@ -675,21 +716,36 @@ async function extractStreamUrl(url) {
             return CDN_PREFERRED_HOSTS.length;
         }
 
+        //copies the urls array 
+        //assigns priority between the urls
+        //lower is better
+        //returns the lowest/the first/the best one
         function getBestSubtitleUrl(urls) {
             if (!urls || urls.length === 0) return null;
             return [...urls].sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0];
         }
 
+
         // ─── Rewrite JPG-segment HLS playlists ──────────────────────────────
         async function resolveStreamUrl(rawUrl, headers) {
+            //only processes HLS/.m3u8 files
             if (!rawUrl.includes('.m3u8')) return rawUrl;
 
             try {
                 const resp = await animexFetch(rawUrl, { headers });
                 if (!resp || resp.status !== 200) return rawUrl;
 
+                //downloads the actual .m3u8 file content as txt
                 const text = await resp.text();
+                //^ at the start of a line, must not start with # (skips comment lines)
+                //one or more non-whitespace characters
+                //.jpg 
+                ///m is multiline flag; matches start of each line
+                //.test() runs the regex against a string and returns T/F
+                //Example image.jpg
 
+
+                //no rewrite needed
                 const hasJpgSegments = /^(?!#)[^\s]+\.jpg/m.test(text);
                 if (!hasJpgSegments) {
                     console.log("[resolveStreamUrl] Standard HLS, no rewrite needed for: " + rawUrl);
@@ -698,12 +754,21 @@ async function extractStreamUrl(url) {
 
                 console.log("[resolveStreamUrl] Detected .jpg-segment HLS, rewriting manifest...");
 
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8 =>
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0
                 const base = rawUrl.substring(0, rawUrl.lastIndexOf('/') + 1);
+
+                //for eeach matched .jpg path
+                //if it starts with http leave it alone
+                //otherwise prepend 'base' to it
+                //photo.jpg
+                //=> https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/photo.jpg
                 const rewritten = text.replace(
                     /^(?!#)([^\s]+\.jpg)/gm,
                     (seg) => (seg.startsWith('http') ? seg : base + seg)
                 );
 
+                //converts the rewritten text into a base64 data URL
                 const encoded = btoa(unescape(encodeURIComponent(rewritten)));
                 return `data:application/vnd.apple.mpegurl;base64,${encoded}`;
 
@@ -714,16 +779,36 @@ async function extractStreamUrl(url) {
         }
 
         // 1. Fetch available servers
+
+        //https://animex.one/watch/crest-of-the-stars-290-episode-6
+        const domainUrl = `https://animex.one/watch/${name}-${id}-episode-${episodeNumber}`;
+
+        //https://pp.animex.one/rest/api/servers?id=crest-of-the-stars-vee16&epNum=6
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
 
-        const serversResp = await animexFetch(serversUrl);
-        if (!serversResp || serversResp.status !== 200) {
-            console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: null });
-        }
 
-        const serversData = await serversResp.json();
+        console.log("[extractStreamUrl] Domain URL: " + domainUrl);
+        const headers = {
+            "Host": "pp.animex.one", 
+            "Origin": "https://animex.one", 
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",
+        }
+        const serversRsp = await runPythonScript('./cookie_generator.py', [domainUrl, serversUrl, JSON.stringify(headers)]);
+        const serversData = JSON.parse(serversRsp);
+        console.log(serversData);
+
+        // const serversResp = await animexFetch(serversUrl, headers);
+
+        // if (!serversResp || serversResp.status !== 200) {
+        //     console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
+        //     return JSON.stringify({ streams: [], subtitles: null });
+        // }
+
+        // const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
 
@@ -732,25 +817,40 @@ async function extractStreamUrl(url) {
 
         async function fetchProviderStream(provider, type) {
             const providerId = provider.id;
+            //https://pp.animex.one/rest/api/sources?id=crest-of-the-stars-vee16&epNum=6&type=sub&providerId=yuki
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
 
-            const sourcesResp = await animexFetch(sourcesUrl);
-            if (!sourcesResp || sourcesResp.status !== 200) {
-                console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
-                return null;
-            }
 
-            const sourcesData = await sourcesResp.json();
+            console.log("[extractStreamUrl] Domain URL: " + domainUrl);
+            const headers = {
+                "Host": "pp.animex.one", 
+                "Origin": "https://animex.one", 
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+            }
+            const sourcesResp = await runPythonScript('./cookie_generator.py', [domainUrl, sourcesUrl, JSON.stringify(headers)]);
+            const sourcesData = JSON.parse(sourcesResp);
+            console.log(sourcesData);
+
+            // const sourcesResp = await animexFetch(sourcesUrl);
+            // if (!sourcesResp || sourcesResp.status !== 200) {
+            //     console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
+            //     return null;
+            // }
+
+            // const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
             }
 
-            const source = sourcesData.sources[0];
+            const source = sourcesData.sources[0]; 
             const apiHeaders = sourcesData.headers || {};
 
-            const rawUrl = source.url;
+            const rawUrl = source.url; ////"https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8"
             const isMochi = providerId.toLowerCase() === "mochi";
             const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
 
@@ -758,9 +858,11 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
 
-            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders));
+            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders)); //"Referer":"https://megaplay.buzz/"}
 
-            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null)
+
+            //https://megaplay.buzz/
+            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null) 
                 || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
                 || null;
 
@@ -773,33 +875,35 @@ async function extractStreamUrl(url) {
             const finalReferer = referer || "https://animex.one/";
             const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
 
-            const headers = {
-                "Referer":    finalReferer,
-                "Origin":     finalOrigin,
-                "User-Agent": userAgent,
+            headers = {
+                "Referer":    finalReferer, //https://megaplay.buzz/
+                "Origin":     finalOrigin, //https://animex.one
+                "User-Agent": userAgent,   //Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1
             };
 
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
 
             // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
-            const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
-            const streamUrl = isDirectMp4
-                ? resolvedUrl
-                : await resolveStreamUrl(resolvedUrl, headers);
+            // const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
+            // const streamUrl = isDirectMp4
+            //     ? resolvedUrl
+            //     : await resolveStreamUrl(resolvedUrl, headers);
 
-            if (isDirectMp4) {
-                console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
-            }
+            // if (isDirectMp4) {
+            //     console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
+            // }
 
             // Use track kind to determine if subtitle exists — let the API decide,
             // not the provider name. If tracks exist and are captions/subtitles, use them.
             const rawTracks = (sourcesData.tracks || [])
                 .filter(t => t.url && (t.kind === "captions" || t.kind === "subtitles"))
                 .map(t => t.url);
+            //"https://1oe.lostproject.club/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/subtitles/eng-2.vtt"
 
             const subtitleUrl = rawTracks.length > 0
                 ? getBestSubtitleUrl(rawTracks)
                 : null;
+            
 
             if (subtitleUrl) {
                 console.log("[extractStreamUrl] Subtitle for " + providerId + ": " + subtitleUrl);
@@ -807,8 +911,8 @@ async function extractStreamUrl(url) {
                 console.log("[extractStreamUrl] No subtitle tracks for " + providerId);
             }
 
-            const tip = provider.tip ? ` (${provider.tip})` : '';
-            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
+            const tip = provider.tip ? ` (${provider.tip})` : '';                //"Soft sub, Good, Multi quality"
+            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;     //'YUKI - SUB (Soft sub, Good, Multi quality)'
 
             return { title, streamUrl, headers, subtitleUrl };
         }
@@ -867,6 +971,7 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
             true,
             options.encoding ?? 'utf-8'
         );
+        //returns status, headers, body
     } catch(e) {
         try {
             return await fetch(url, options);
@@ -875,3 +980,103 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
         }
     }
 }
+
+
+async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
+    const processedBody = (method !== "GET" && body && typeof body === 'object') 
+        ? JSON.stringify(body)
+        : (method !== "GET" ? body : null); //GET request should not have a body
+
+    const options = {
+        method,
+        headers,
+        body: processedBody,
+        redirect: redirect ? 'follow' : 'manual', 
+		//follow: atuomatically follows HTTP redirects
+		//manual: don't follow them, you'll handle it
+    };
+
+    try {
+        const response = await fetch(url, options);
+		//sends the HTTP request
+		//waits for the fetch() promise to resolve
+		//contains metadata about the HTTP response
+
+        const rawBuffer = await response.arrayBuffer();
+		//reads the response body as binary data
+		//useful when the response is not plain text (like files, images, etc)
+
+        const decoder = new TextDecoder(encoding || "utf-8");
+		//converts an ArrayBuffer string using specified encoding 
+		//if no encoding is specified it will use "utf-8"
+
+        const decodedText = decoder.decode(rawBuffer);
+		//raw response body text
+		//Example: '{"success":true,"data":[1,2,3]}'
+
+        const result = {
+            headers: Object.fromEntries(response.headers.entries()),
+			//response.headers.entries() gives an iterator of key-value pairs
+			//Object.fromEntries converts it to a plain object
+			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
+
+            status: response.status,
+			//HTTP status code
+            _data: decodedText,
+            text: function () {
+                return Promise.resolve(this._data);
+            },
+			//returns a promise that resolves to a string
+
+            json: function () {
+                try {
+                    return Promise.resolve(JSON.parse(this._data));
+                } catch (e) {
+                    return Promise.reject("JSON parse error: " + e.message);
+                }
+            }
+        };
+
+        return result;
+
+    } catch (err) {
+        return Promise.reject(err.message || "Unknown error");
+    }
+}
+ 
+const { spawn } = require('child_process');
+
+function runPythonScript(scriptPath, args = []) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python', [scriptPath, ...args]);
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`Python exited with code ${code}: ${stderr}`));
+      }
+
+      const result = stdout.trim();
+
+      if (!result) {
+        return reject(new Error(`Python script produced no output. stderr: ${stderr}`));
+      }
+
+      resolve(result);
+    });
+
+    proc.on('error', (err) => reject(err));
+  });
+}
+
+// // usage
+// (async () => {
+//   const myString = "hello world";
+//   const number = await runPythonScript('./generate_number.py', [myString]);
+//   console.log('Got number:', number);
+// })();

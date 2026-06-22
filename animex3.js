@@ -10,7 +10,21 @@
 
 
 class Anilist {
+    //All methods inside are static meaning we can can call them directly on the class
+    //e.g. Anilist.search() without creating an instance
+
+    //takes a search keyword and optional filters object
     static async search(keyword, filters = {}) {
+    
+        //https://docs.anilist.co/guide/graphql/
+        //https://docs.anilist.co/guide/graphql/pagination (to get multiple objects)
+        //https://docs.anilist.co/reference/query
+
+        // Here we define our query as a multi-line string
+        // Storing it in a separate .graphql/.gql file is also possible
+
+        //query maps to a filter we can pass in
+        //media { } what gets returned per anime
         const query = `query (
                 $search: String,
                 $page: Int,
@@ -29,6 +43,7 @@ class Anilist {
                 $averageScore_greater: Int,
                 $averageScore_lesser: Int
             ) {
+                
                 Page(page: $page, perPage: $perPage) {
                 media(
                     search: $search,
@@ -83,7 +98,8 @@ class Anilist {
                 }
             }
         }`;
-
+        // Define our query variables and values that will be used in the query request
+        //the actual values passed into the query
         const variables = {
             "page": 1,
             "perPage": 50,
@@ -94,12 +110,17 @@ class Anilist {
             ],
             "search": keyword,
             "type": "ANIME",
-            ...filters
+            ...filters 
+            //spread operator unpacks an iterable into individual elements; if share the same key, the property placed last will override the previous ones
+            //...filters spreads any extra filters the caller provided, overriding defaults if keys conflict
         }
 
         return Anilist.anilistFetch(query, variables);
     }
 
+    //designed to fetch one specific anime by its "id" or "idMal"
+    //the query is hardcoded to page:1, perPage: 1 since we only want one result
+    //media is what gets returned
     static async lookup(filters) {
         const query = `query (
                 $id: Int,
@@ -156,17 +177,19 @@ class Anilist {
         return Anilist.anilistFetch(query, variables);
     }
 
+    //fetches all currently airing anime for the current season
+    //https://anilist.co/search/anime?year=2026&season=SPRING&airing%20status=RELEASING
     static async getLatest(filters) {
         let page = 0;
         let hasNextPage = true;
-        const perPage = 50;
+        const perPage = 50; //the API returns 50 results per page
         const currentDate = new Date();
 
-        filters.seasonYear = currentDate.getFullYear();
-        filters.season = Anilist.monthToSeason(currentDate.getMonth());
-
+        filters.seasonYear = currentDate.getFullYear(); //get current year
+        filters.season = Anilist.monthToSeason(currentDate.getMonth()); //get current season using current month
         const results = [];
 
+        //Each iteration fetches the next page
         do {
             page++;
 
@@ -240,15 +263,16 @@ class Anilist {
                 "status": "RELEASING",
                 ...filters
             }
-
             const fetchResults = await Anilist.anilistFetch(query, variables);
             results.push(fetchResults);
-
+            //if hasNextPage == false end loop
             if(fetchResults?.Page?.pageInfo?.hasNextPage !== true) {
                 hasNextPage = false;
             }
 
         } while(hasNextPage);
+
+        //Merge all pages into one single object (one page)
 
         const mergedObject = { Page: { media: []}};
 
@@ -276,8 +300,8 @@ class Anilist {
                 })
             });
 
-            if (response.status !== 200) {
-                if (response.status === 429) {
+            if (response.status !== 200) { //Not Ok
+                if (response.status === 429) { //Too many requests
                     console.info('=== RATE LIMIT EXCEEDED, SLEEPING AND RETRYING ===');
                     const retryTimeout = response.headers.get('Retry-After');
                     const timeout = Math.ceil((parseInt(retryTimeout))) * 1000 + extraTimeoutMs;
@@ -302,6 +326,7 @@ class Anilist {
         }
     }
 
+    //converts date format {year, month, day} to standard "YYYY-MM-DD" string
     static convertAnilistDateToDateStr(dateObject) {
         if (dateObject.year == null) {
             return null;
@@ -312,31 +337,35 @@ class Anilist {
         if (dateObject.day == null || parseInt(dateObject.day) < 1) {
             dateObject.day = 1;
         }
+
+        //ensures single-digit months/days get a leading zero
         return dateObject.year + "-" + (dateObject.month).toString().padStart(2, '0') + "-" + (dateObject.day).toString().padStart(2, '0');
     }
 
+    //Takes a Unix timestamp (seconds since 1970) and returns a human-readable countdown string.
     static nextAnilistAirDateToCountdown(timestamp) {
         if (timestamp == null) return null;
 
-        const airDate = new Date((timestamp * 1000));
+        const airDate = new Date((timestamp * 1000)); //Multiplies by 1000 because JS Date uses milliseconds but Unix timestamps are in seconds.
         const now = new Date();
 
         if (now > airDate) return null;
 
-        let [days, hourRemainder] = (((airDate - now) / 1000) / 60 / 60 / 24).toString().split('.');
+        let [days, hourRemainder] = (((airDate - now) / 1000) / 60 / 60 / 24).toString().split('.'); //Calculates the difference in days as a decimal (e.g. 2.75), then splits on . to get whole days and the fractional remainder separately.
         let [hours, minRemainder] = (parseFloat("0." + hourRemainder) * 24).toString().split('.');
         let minutes = Math.ceil((parseFloat("0." + minRemainder) * 60));
+
+        //Converts the hourRemainder to hours, then the minRemainder to minutes. Math.ceil rounds up so you never show 0 minutes.
 
         return `Next episode will air in ${days} days, ${hours} hours and ${minutes} minutes at ${airDate.getFullYear()}-${(airDate.getMonth() + 1).toString().padStart(2, '0')}-${(airDate.getDate()).toString().padStart(2, '0')} ${airDate.getHours()}:${airDate.getMinutes()}`;
     }
 
     static monthToSeason(month) {
-        const seasons = ['WINTER', 'SPRING', 'SUMMER', 'FALL'];
-        if(month == 11) return seasons[0];
-        if(month <= 1) return seasons[0];
-        if(month <= 4) return seasons[1];
-        if(month <= 7) return seasons[2];
-        return seasons[3];
+        // month is 0-indexed (0 = Jan, 11 = Dec)
+        if (month >= 0 && month <= 2) return "WINTER"; // Jan, Feb, Mar
+        if (month >= 3 && month <= 5) return "SPRING"; // Apr, May, Jun
+        if (month >= 6 && month <= 8) return "SUMMER"; // Jul, Aug, Sep
+        return "FALL";                                  // Oct, Nov, Dec
     }
 }
 
@@ -348,10 +377,14 @@ class Anilist {
 
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
+
 // (async() => {
 //     const results = await searchResults('Crest of Stars');
 //     const href = JSON.parse(results)[0].href;
 //     console.log("HREF:", href);
+
+//     const details = await extractDetails(href);
+//     console.log("Details: ", details);
  
 //     const episodes = await extractEpisodes(href);
 //     const firstEpisodeHref = JSON.parse(episodes)[5].href;
@@ -360,27 +393,19 @@ class Anilist {
 //     const streamUrl = await extractStreamUrl(firstEpisodeHref);
 //     const parsed = JSON.parse(streamUrl);
 //     const streams = parsed.streams;
-//     const subtitles = parsed.subtitles; //the best subtitle
+//     const subtitles = parsed.subtitles;
  
 //     console.log("\n===== STREAMS =====");
 //     streams.forEach(s => {
 //         const subUrl = s.subtitleUrl || subtitles || null;
-//         // const isHls = /\.m3u8/i.test(s.streamUrl);
-//         const ref = s.headers?.Referer ? `--add-header "Referer:${s.headers.Referer}"` : "";
- 
+//         const refHeader = s.headers?.Referer || "https://animex.one";
+//         const originHeader = s.headers?.Origin || "https://animex.one";
+//         const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
+
 //         console.log(`\n[${s.title}]`);
 //         console.log(`\n# 1. Download video:`);
-//         // if (isHls) {
-//         //     console.log(`python -m yt_dlp ${ref} --downloader ffmpeg --hls-use-mpegts "${s.streamUrl}" -o "output.mp4"`);
-//         // } else {
-//         //     const refHeader = s.headers?.Referer || "https://animex.one";
-//         //     console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
-//         //     console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
-//         // }
-
-//         const refHeader = s.headers?.Referer || "https://animex.one";
-//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "${s.streamUrl}"`);
-//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:https://animex.one"  --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
+//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
 //         console.log(`\n# 2. Download subtitles separately:`);
 //         if (s.subtitleUrl) {
@@ -388,17 +413,17 @@ class Anilist {
 //         } else {
 //             console.log(`# No subtitles available for this stream`);
 //         }
+
 //         console.log(`\n# 3. Merge video + subtitles:`);
-//         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//         if (subUrl) {
+//             console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//         } else {
+//             console.log(`# Skip merge — no subs`);
+//         }
 //     });
  
 //     console.log("\n===== SUBTITLES =====");
-//     console.log("\n===== SUBTITLES =====");
-//     if (subtitles) {
-//         console.log(subtitles);
-//     } else {
-//         console.log("No subtitles found");
-//     }
+//     console.log(subtitles || "No subtitles found");
 // })();
 
 // ***** LOCAL TESTING
@@ -428,6 +453,8 @@ async function animexFetch(url, options = {}) {
 // }
 
 // ─── AnimeX Search (now rate‑limited) ───
+//https://graphql.animex.one/graphql
+//FastSearch is just a semantic name
 async function searchAnimex(keyword, limit = 24) {
     limit = Math.min(24, Math.max(1, limit));
     console.log("[searchAnimex] Called with keyword: " + keyword + " limit: " + limit);
@@ -557,21 +584,21 @@ async function searchResults(keyword) {
 async function extractDetails(url) {
     try {
         if (url.includes('anime')) {
-            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/);
+            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/); //captures anime/290/crest-of-the-stars-vee16
             if (!match) throw new Error("Invalid URL format");
 
-            const anilistId = parseInt(match[1]);
+            const anilistId = parseInt(match[1]); //captures 290
 
             const aniData = await Anilist.lookup({ id: anilistId });
-            const anime = aniData.Page.media[0];
+            const anime = aniData.Page.media[0]; //the ONE result
 
             const cleanDescription = anime.description
-                ? anime.description.replace(/<[^>]+>/g, '').trim()
+                ? anime.description.replace(/<[^>]+>/g, '').trim() //removes all HTML tags (e.g <b> and </b>)
                 : 'No description available';
 
             const transformedResults = [{
                 description: cleanDescription,
-                aliases: `Duration: ${anime.episodes ? 24 + " minutes" : 'Unknown'}`,
+                aliases: `Duration: ${anime.episodes ? anime.episodes + " episodes" : 'Unknown'}`,
                 airdate: `Aired: ${anime.startDate.year ? Anilist.convertAnilistDateToDateStr(anime.startDate) : 'Unknown'}`
             }];
 
@@ -594,24 +621,28 @@ async function extractDetails(url) {
 async function extractEpisodes(url) {
     try {
         if(url.includes('anime')) {
-            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/);
+            const match = url.match(/anime\/(\d+)(?:\/([^\/]+))?/); //captures anime/290/crest-of-the-stars-vee16
             if (!match) throw new Error("Invalid URL format");
 
-            const anilistId = parseInt(match[1]);
+            const anilistId = parseInt(match[1]); //captures 290
             const aniData = await Anilist.lookup({ id: anilistId });
             const anime = aniData.Page.media[0];
 
-            console.log(anime);
+            console.log("Anime: ", anime);
 
             if (!anime) return JSON.stringify([]);
 
             const episodesCount = anime.episodes || (anime.nextAiringEpisode?.episode - 1) || 1;
+            //13 || airing-1 || 1 (default)
             const episodesArray = [];
             for (let i = 1; i <= episodesCount; i++) {
                 episodesArray.push({
-                    href: `anime/${anilistId}/${match[2] || ''}/${i}`,
+                    href: `anime/${anilistId}/${match[2] || ''}/${i}`, 
+                   //anime/290/crest-of-the-stars-vee16/6 or anime/290/6
                     number: i,
+                    //episode 6
                     title: `Episode ${i}`
+                    //Episode 6
                 });
             }
 
@@ -628,15 +659,15 @@ async function extractEpisodes(url) {
 
 function slugify(title) {
     return title
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
+      .toLowerCase() //lowercase
+      .normalize("NFKD") //breaks accented letters into base letters + accent marks
+      .replace(/[\u0300-\u036f]/g, "") //remove accent marks
+      .replace(/[^a-z0-9\s-]/g, "") //remove invalid chars
+      .trim() //remove whitespace
+      .replace(/\s+/g, "-") //replace spaces with hyphens
+      .replace(/-+/g, "-"); //if repeated hyphens, reduce to one
 }
-// ─── CDN rewrite ───────────────────────────────────────────────────────────
+
 function rewriteMochiCdn(url) {
     try {
         console.log("[rewriteMochiCdn] called with: " + url);
@@ -658,153 +689,250 @@ function rewriteMochiCdn(url) {
     }
 }
 
+
 // ─── Extract Stream URL ────────────────────────────────────────────────────
 async function extractStreamUrl(url) {
     try {
-        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/);
+        const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); //captures anime/290/crest-of-the-stars-vee16/6
         if (!match) throw new Error('Invalid URL format');
- 
-        const slug = match[2];
-        const episodeNumber = match[3];
- 
+
+        const slug = match[2]; //crest-of-the-stars-vee16
+        const episodeNumber = match[3]; //6
+
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
- 
+
         const CDN_PREFERRED_HOSTS = [
             'cdn.',
             'zaza.',
         ];
- 
-        function getCdnPriority(url) {
+
+        //returns idex of CDN_PREFERRED_HOSTS if the url contains it
+        function getCdnPriority(u) {
             for (let i = 0; i < CDN_PREFERRED_HOSTS.length; i++) {
-                if (url.includes(CDN_PREFERRED_HOSTS[i])) return i;
+                if (u.includes(CDN_PREFERRED_HOSTS[i])) return i;
             }
             return CDN_PREFERRED_HOSTS.length;
         }
- 
-        function getBestSubtitleUrl(tracks) {
-            if (!tracks || tracks.length === 0) return null;
-            const sorted = [...tracks].sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
-            return sorted[0].url;
+
+        //copies the urls array 
+        //assigns priority between the urls
+        //lower is better
+        //returns the lowest/the first/the best one
+        function getBestSubtitleUrl(urls) {
+            if (!urls || urls.length === 0) return null;
+            return [...urls].sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0];
         }
- 
+
+
+        // ─── Rewrite JPG-segment HLS playlists ──────────────────────────────
+        async function resolveStreamUrl(rawUrl, headers) {
+            //only processes HLS/.m3u8 files
+            if (!rawUrl.includes('.m3u8')) return rawUrl;
+
+            try {
+                const resp = await animexFetch(rawUrl, { headers });
+                if (!resp || resp.status !== 200) return rawUrl;
+
+                //downloads the actual .m3u8 file content as txt
+                const text = await resp.text();
+                //^ at the start of a line, must not start with # (skips comment lines)
+                //one or more non-whitespace characters
+                //.jpg 
+                ///m is multiline flag; matches start of each line
+                //.test() runs the regex against a string and returns T/F
+                //Example image.jpg
+
+
+                //no rewrite needed
+                const hasJpgSegments = /^(?!#)[^\s]+\.jpg/m.test(text);
+                if (!hasJpgSegments) {
+                    console.log("[resolveStreamUrl] Standard HLS, no rewrite needed for: " + rawUrl);
+                    return rawUrl;
+                }
+
+                console.log("[resolveStreamUrl] Detected .jpg-segment HLS, rewriting manifest...");
+
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8 =>
+                //https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0
+                const base = rawUrl.substring(0, rawUrl.lastIndexOf('/') + 1);
+
+                //for eeach matched .jpg path
+                //if it starts with http leave it alone
+                //otherwise prepend 'base' to it
+                //photo.jpg
+                //=> https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/photo.jpg
+                const rewritten = text.replace(
+                    /^(?!#)([^\s]+\.jpg)/gm,
+                    (seg) => (seg.startsWith('http') ? seg : base + seg)
+                );
+
+                //converts the rewritten text into a base64 data URL
+                const encoded = btoa(unescape(encodeURIComponent(rewritten)));
+                return `data:application/vnd.apple.mpegurl;base64,${encoded}`;
+
+            } catch (e) {
+                console.warn("[resolveStreamUrl] Manifest rewrite failed, falling back: " + e);
+                return rawUrl;
+            }
+        }
+
         // 1. Fetch available servers
+                
+        //https://pp.animex.one/rest/api/servers?id=crest-of-the-stars-vee16&epNum=6
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
- 
-        const serversResp = await animexFetch(serversUrl);
+        const headers = {
+            "Host": "pp.animex.one", 
+            "Origin": "https://animex.one", 
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
+            "Cookie": ""
+        };
+
+        const serversResp = await animexFetch(serversUrl, headers);
+
         if (!serversResp || serversResp.status !== 200) {
             console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: "" });
+            return JSON.stringify({ streams: [], subtitles: null });
         }
- 
+
         const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
- 
+
         console.log("[extractStreamUrl] Sub providers: " + JSON.stringify(subProviders.map(p => p.id)));
         console.log("[extractStreamUrl] Dub providers: " + JSON.stringify(dubProviders.map(p => p.id)));
- 
-        // Helper to fetch a stream from a provider
+
         async function fetchProviderStream(provider, type) {
             const providerId = provider.id;
+            //https://pp.animex.one/rest/api/sources?id=crest-of-the-stars-vee16&epNum=6&type=sub&providerId=yuki
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
- 
+
             const sourcesResp = await animexFetch(sourcesUrl);
             if (!sourcesResp || sourcesResp.status !== 200) {
                 console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
                 return null;
             }
- 
+
             const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
             }
- 
-            const source = sourcesData.sources[0];
+
+            const source = sourcesData.sources[0]; 
             const apiHeaders = sourcesData.headers || {};
 
-            // Rewrite CDN host for direct MP4 streams (not HLS)
-            const rawUrl = source.url;
+            const rawUrl = source.url; ////"https://cdn.mewstream.buzz/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/master.m3u8"
             const isMochi = providerId.toLowerCase() === "mochi";
-            const streamUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
+            const resolvedUrl = isMochi ? rewriteMochiCdn(rawUrl) : rawUrl;
 
-            if (streamUrl !== rawUrl) {
-                console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + streamUrl);
+            if (resolvedUrl !== rawUrl) {
+                console.log("[extractStreamUrl] CDN rewrite for " + providerId + ": " + rawUrl + " → " + resolvedUrl);
             }
- 
-            // Only pull URLs from tracks, pick best CDN one
-            const rawTracks = (sourcesData.tracks || []).map(t => ({ url: t.url }));
-            const subtitleUrl = getBestSubtitleUrl(rawTracks);
- 
-            if (subtitleUrl) {
-                console.log("[extractStreamUrl] Best subtitle for " + providerId + ": " + subtitleUrl);
-            }
- 
-            const tip = provider.tip ? ` (${provider.tip})` : '';
-            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;
 
-            // Use API headers directly, only inject User-Agent if missing
+            console.log("[extractStreamUrl] Raw API headers for " + providerId + ": " + JSON.stringify(apiHeaders)); //"Referer":"https://megaplay.buzz/"}
+
+
+            //https://megaplay.buzz/
+            const referer = (typeof apiHeaders.Referer === 'string' ? apiHeaders.Referer : null) 
+                || (typeof apiHeaders.referer === 'string' ? apiHeaders.referer : null)
+                || null;
+
+            const origin = (typeof apiHeaders.Origin === 'string' ? apiHeaders.Origin : null)
+                || (typeof apiHeaders.origin === 'string' ? apiHeaders.origin : null)
+                || null;
+
+            const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+
+            const finalReferer = referer || "https://animex.one/";
+            const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
+
             const headers = {
-                "User-Agent": (typeof navigator !== 'undefined' && navigator.userAgent) 
-                    ? navigator.userAgent 
-                    : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-                ...apiHeaders
+                "Referer":    finalReferer, //https://megaplay.buzz/
+                "Origin":     finalOrigin, //https://animex.one
+                "User-Agent": userAgent,   //Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1
             };
 
-            console.log("[extractStreamUrl] Headers for " + providerId + ": " + JSON.stringify(headers));
- 
+            console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
+
+            // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
+            const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
+            const streamUrl = isDirectMp4
+                ? resolvedUrl
+                : await resolveStreamUrl(resolvedUrl, headers);
+
+            if (isDirectMp4) {
+                console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
+            }
+
+            // Use track kind to determine if subtitle exists — let the API decide,
+            // not the provider name. If tracks exist and are captions/subtitles, use them.
+            const rawTracks = (sourcesData.tracks || [])
+                .filter(t => t.url && (t.kind === "captions" || t.kind === "subtitles"))
+                .map(t => t.url);
+            //"https://1oe.lostproject.club/anime/e17184bcb70dcf3942c54e0b537ffc6d/4174eedea19eb90438a935db00e40cb0/subtitles/eng-2.vtt"
+
+            const subtitleUrl = rawTracks.length > 0
+                ? getBestSubtitleUrl(rawTracks)
+                : null;
+            
+
+            if (subtitleUrl) {
+                console.log("[extractStreamUrl] Subtitle for " + providerId + ": " + subtitleUrl);
+            } else {
+                console.log("[extractStreamUrl] No subtitle tracks for " + providerId);
+            }
+
+            const tip = provider.tip ? ` (${provider.tip})` : '';                //"Soft sub, Good, Multi quality"
+            const title = `${providerId.toUpperCase()} - ${type.toUpperCase()}${tip}`;     //'YUKI - SUB (Soft sub, Good, Multi quality)'
+
             return { title, streamUrl, headers, subtitleUrl };
         }
- 
-        // Build all streams sequentially
+
         const streams = [];
-        const allSubtitleUrls = [];
- 
+
         for (const provider of subProviders) {
             const stream = await fetchProviderStream(provider, 'sub');
-            if (stream) {
-                streams.push(stream);
-                if (stream.subtitleUrl && !allSubtitleUrls.includes(stream.subtitleUrl)) {
-                    allSubtitleUrls.push(stream.subtitleUrl);
-                }
-            }
+            if (stream) streams.push(stream);
         }
- 
+
         for (const provider of dubProviders) {
             const stream = await fetchProviderStream(provider, 'dub');
-            if (stream) {
-                streams.push(stream);
-                if (stream.subtitleUrl && !allSubtitleUrls.includes(stream.subtitleUrl)) {
-                    allSubtitleUrls.push(stream.subtitleUrl);
-                }
-            }
+            if (stream) streams.push(stream);
         }
- 
-        // Pick the single best CDN subtitle URL across all streams
-        const bestSubtitleUrl = allSubtitleUrls.sort((a, b) => getCdnPriority(a) - getCdnPriority(b))[0] || null;
- 
-        // Always use best CDN subtitle, overriding any stream-specific one
-        for (const stream of streams) {
-            if (stream.subtitleUrl && bestSubtitleUrl) { 
-                stream.subtitleUrl = bestSubtitleUrl; 
-            }
-        }
- 
-        console.log("[extractStreamUrl] Total streams found: " + streams.length);
-        console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitleUrl);
- 
-        const result = JSON.stringify({ streams, subtitles: bestSubtitleUrl });
+
+        // Best subtitle across all streams that have one
+        const allSubtitleUrls = streams.map(s => s.subtitleUrl).filter(Boolean);
+        const bestSubtitle = getBestSubtitleUrl(allSubtitleUrls) || null;
+
+        // Keep each stream's own subtitleUrl — don't override with global best
+        // so hard sub streams that have no tracks stay null
+        const cleanStreams = streams.map(({ subtitleUrl, ...rest }) => ({
+            ...rest,
+            subtitleUrl: subtitleUrl || null
+        }));
+
+        console.log("[extractStreamUrl] Total streams found: " + cleanStreams.length);
+        console.log("[extractStreamUrl] Best global subtitle: " + bestSubtitle);
+
+        const result = JSON.stringify({
+            streams: cleanStreams,
+            subtitles: bestSubtitle
+        });
+
         console.log("[extractStreamUrl] Result: " + result.substring(0, 300));
         console.log(JSON.parse(result));
+        console.log(result);
         return result;
- 
+
     } catch (error) {
         console.log('[extractStreamUrl] Fetch error: ' + error);
-        return JSON.stringify({ streams: [], subtitles: "" });
+        return JSON.stringify({ streams: [], subtitles: null });
     }
 }
+
+
 // ─── SoraFetch (fallback wrapper, unchanged) ───
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null, encoding: 'utf-8' }) {
     try {
@@ -816,6 +944,7 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
             true,
             options.encoding ?? 'utf-8'
         );
+        //returns status, headers, body
     } catch(e) {
         try {
             return await fetch(url, options);
@@ -824,3 +953,67 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
         }
     }
 }
+
+
+async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
+    const processedBody = (method !== "GET" && body && typeof body === 'object') 
+        ? JSON.stringify(body)
+        : (method !== "GET" ? body : null); //GET request should not have a body
+
+    const options = {
+        method,
+        headers,
+        body: processedBody,
+        redirect: redirect ? 'follow' : 'manual', 
+		//follow: atuomatically follows HTTP redirects
+		//manual: don't follow them, you'll handle it
+    };
+
+    try {
+        const response = await fetch(url, options);
+		//sends the HTTP request
+		//waits for the fetch() promise to resolve
+		//contains metadata about the HTTP response
+
+        const rawBuffer = await response.arrayBuffer();
+		//reads the response body as binary data
+		//useful when the response is not plain text (like files, images, etc)
+
+        const decoder = new TextDecoder(encoding || "utf-8");
+		//converts an ArrayBuffer string using specified encoding 
+		//if no encoding is specified it will use "utf-8"
+
+        const decodedText = decoder.decode(rawBuffer);
+		//raw response body text
+		//Example: '{"success":true,"data":[1,2,3]}'
+
+        const result = {
+            headers: Object.fromEntries(response.headers.entries()),
+			//response.headers.entries() gives an iterator of key-value pairs
+			//Object.fromEntries converts it to a plain object
+			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
+
+            status: response.status,
+			//HTTP status code
+            _data: decodedText,
+            text: function () {
+                return Promise.resolve(this._data);
+            },
+			//returns a promise that resolves to a string
+
+            json: function () {
+                try {
+                    return Promise.resolve(JSON.parse(this._data));
+                } catch (e) {
+                    return Promise.reject("JSON parse error: " + e.message);
+                }
+            }
+        };
+
+        return result;
+
+    } catch (err) {
+        return Promise.reject(err.message || "Unknown error");
+    }
+}
+ 
