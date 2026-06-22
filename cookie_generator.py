@@ -41,43 +41,75 @@
 
 
 # generate_number.py
-
 import io
 import asyncio
 import json
 import sys
+import os
+import time
 from cfbypass import CF_Solver
 import requests
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
+CACHE_FILE = os.path.join(os.path.dirname(__file__), '.cf_cache.json')
+CACHE_TTL = 3600 * 6  # re-solve at most once every 6 hours; tune as needed
 
-cookies = {
-}
+def load_cached_cookie(domain):
+    try:
+        with open(CACHE_FILE, 'r') as f:
+            data = json.load(f)
+        entry = data.get(domain)
+        if entry and (time.time() - entry['ts']) < CACHE_TTL:
+            return entry['cf_clearance']
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+    return None
 
-async def main(domain):
+def save_cached_cookie(domain, cf_clearance):
+    try:
+        with open(CACHE_FILE, 'r') as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    data[domain] = {'cf_clearance': cf_clearance, 'ts': time.time()}
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(data, f)
+
+async def solve(domain):
     solver = CF_Solver(
         domain=domain,
-        headless=True,         # Set to True to run without UI
-        slow_mo=100,            # Optional: adds delay between steps
-        poll_interval=1.0,      # Check for cookies every second
-        max_wait=90.0           # Wait up to 90 seconds
+        headless=True,
+        slow_mo=100,
+        poll_interval=1.0,
+        max_wait=90.0
     )
-
     try:
-        cf_cookie = await solver.bypass()
-        # print(cf_cookie)
-        cookies["cf_clearance"] = cf_cookie
+        return await solver.bypass()
     finally:
         await solver.close()
 
-if __name__ == "__main__":
-    
-    domain = sys.argv[1]
-    request = sys.argv[2]
-    headers = json.loads(sys.argv[3])
-    asyncio.run(main(domain))
-    
-    response = requests.get(request, headers=headers, cookies=cookies)
-    print(response.text)
+def fetch_with_cookie(request_url, headers, cf_clearance):
+    return requests.get(request_url, headers=headers, cookies={"cf_clearance": cf_clearance})
 
-    
+if __name__ == "__main__":
+    domain = sys.argv[1]
+    request_url = sys.argv[2]
+    headers = json.loads(sys.argv[3])
+
+    cf_clearance = load_cached_cookie(domain)
+
+    if cf_clearance:
+        response = fetch_with_cookie(request_url, headers, cf_clearance)
+        # If the cached cookie is stale/invalid, the site will usually respond
+        # with a 403 or a CF challenge page instead of real JSON — re-solve once.
+        if response.status_code in (403, 503) or 'cf-mitigated' in response.headers:
+            cf_clearance = asyncio.run(solve(domain))
+            save_cached_cookie(domain, cf_clearance)
+            response = fetch_with_cookie(request_url, headers, cf_clearance)
+    else:
+        cf_clearance = asyncio.run(solve(domain))
+        save_cached_cookie(domain, cf_clearance)
+        response = fetch_with_cookie(request_url, headers, cf_clearance)
+
+    print(response.text)

@@ -9,6 +9,61 @@
 // git push
 
 
+function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+// ─── Rate‑limiter for all animex.one requests ───
+// Strategy: burst optimistically up to a generous per‑minute ceiling, and only
+// slow down REACTIVELY when the server actually returns 429 (see below). The
+// ceiling is just a safety cap against runaway loops — the real protection is
+// the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
+// ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
+// several episodes per minute.
+const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
+const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
+const ANIMEX_MAX_429_RETRIES = 3;
+let animexRequestTimes = [];
+let animexAdmission = Promise.resolve();
+
+async function animexFetch(url, options = {}, attempt = 0) {
+    // Serialize only the admission decision so parallel callers don't grab the
+    // same slot; the actual network requests still run concurrently.
+    const ticket = animexAdmission.then(() => animexReserveSlot());
+    animexAdmission = ticket.catch(() => {});
+    await ticket;
+
+    const response = await soraFetch(url, options);
+
+    // Reactive backoff: respect the server's own throttle if (and only if) it
+    // actually pushes back, instead of crawling preemptively.
+    if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
+        const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
+        const waitMs = retryAfter * 1000 + 250;
+        console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
+        await sleep(waitMs);
+        return animexFetch(url, options, attempt + 1);
+    }
+
+    return response;
+}
+
+async function animexReserveSlot() {
+    const now = Date.now();
+    // Forget timestamps that have aged out of the rolling window.
+    animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
+
+    if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
+        const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
+        console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
+        await sleep(waitTime);
+        return animexReserveSlot();
+    }
+
+    animexRequestTimes.push(Date.now());
+}
+	
+
 class Anilist {
     //All methods inside are static meaning we can can call them directly on the class
     //e.g. Anilist.search() without creating an instance
@@ -428,31 +483,7 @@ class Anilist {
 
 // ***** LOCAL TESTING
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
-async function animexFetch(url, options = {}) {
-    return soraFetch(url, options);
-}
-
-// // ─── Rate‑limiter for all animex.one requests ───
-// let lastAnimexRequest = 0;
-
-// async function animexFetch(url, options = {}) {
-//     const now = Date.now();
-//     const minInterval = 6000; // 6 seconds to stay under 10 req/min
-//     const timeSinceLast = now - lastAnimexRequest;
-//     if (timeSinceLast < minInterval) {
-//         const waitTime = minInterval - timeSinceLast;
-//         console.log("[RateLimit] Waiting " + waitTime + "ms before next animex request.");
-//         await sleep(waitTime);
-//     }
-//     lastAnimexRequest = Date.now();
-//     return soraFetch(url, options);
-// }
-
-// ─── AnimeX Search (now rate‑limited) ───
 //https://graphql.animex.one/graphql
 //FastSearch is just a semantic name
 async function searchAnimex(keyword, limit = 24) {
@@ -696,8 +727,10 @@ async function extractStreamUrl(url) {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); //captures anime/290/crest-of-the-stars-vee16/6
         if (!match) throw new Error('Invalid URL format');
 
+        const id = match[1]; //290
         const slug = match[2]; //crest-of-the-stars-vee16
         const episodeNumber = match[3]; //6
+        const name = slug.replace(/-[^-]+$/, ''); // crest-of-the-stars
 
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
 
@@ -777,25 +810,36 @@ async function extractStreamUrl(url) {
         }
 
         // 1. Fetch available servers
-                
+
+        //https://animex.one/watch/crest-of-the-stars-290-episode-6
+        const domainUrl = `https://animex.one/watch/${name}-${id}-episode-${episodeNumber}`;
+
         //https://pp.animex.one/rest/api/servers?id=crest-of-the-stars-vee16&epNum=6
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
+
+
+        console.log("[extractStreamUrl] Domain URL: " + domainUrl);
         const headers = {
             "Host": "pp.animex.one", 
             "Origin": "https://animex.one", 
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
-            "Cookie": ""
-        };
-
-        const serversResp = await animexFetch(serversUrl, headers);
-
-        if (!serversResp || serversResp.status !== 200) {
-            console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-            return JSON.stringify({ streams: [], subtitles: null });
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",
         }
+        const serversRsp = await runPythonScript('./cookie_generator.py', [domainUrl, serversUrl, JSON.stringify(headers)]);
+        const serversData = JSON.parse(serversRsp);
+        console.log(serversData);
 
-        const serversData = await serversResp.json();
+        // const serversResp = await animexFetch(serversUrl, headers);
+
+        // if (!serversResp || serversResp.status !== 200) {
+        //     console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
+        //     return JSON.stringify({ streams: [], subtitles: null });
+        // }
+
+        // const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
 
@@ -808,13 +852,27 @@ async function extractStreamUrl(url) {
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
 
-            const sourcesResp = await animexFetch(sourcesUrl);
-            if (!sourcesResp || sourcesResp.status !== 200) {
-                console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
-                return null;
-            }
 
-            const sourcesData = await sourcesResp.json();
+            console.log("[extractStreamUrl] Domain URL: " + domainUrl);
+            const reqHeaders = {
+                "Host": "pp.animex.one", 
+                "Origin": "https://animex.one", 
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate",
+            }
+            const sourcesResp = await runPythonScript('./cookie_generator.py', [domainUrl, sourcesUrl, JSON.stringify(reqHeaders)]);
+            const sourcesData = JSON.parse(sourcesResp);
+            console.log(sourcesData);
+
+            // const sourcesResp = await animexFetch(sourcesUrl);
+            // if (!sourcesResp || sourcesResp.status !== 200) {
+            //     console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
+            //     return null;
+            // }
+
+            // const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
@@ -848,13 +906,13 @@ async function extractStreamUrl(url) {
             const finalReferer = referer || "https://animex.one/";
             const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
 
-            const headers = {
+            const outHeaders = {
                 "Referer":    finalReferer, //https://megaplay.buzz/
                 "Origin":     finalOrigin, //https://animex.one
                 "User-Agent": userAgent,   //Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1
             };
 
-            console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
+            console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(outHeaders));
 
             // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
             const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
@@ -1017,3 +1075,39 @@ async function fetchv2(url, headers = {}, method = "GET", body = null, redirect 
     }
 }
  
+const { spawn } = require('child_process');
+
+function runPythonScript(scriptPath, args = []) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python', [scriptPath, ...args]);
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`Python exited with code ${code}: ${stderr}`));
+      }
+
+      const result = stdout.trim();
+
+      if (!result) {
+        return reject(new Error(`Python script produced no output. stderr: ${stderr}`));
+      }
+
+      resolve(result);
+    });
+
+    proc.on('error', (err) => reject(err));
+  });
+}
+
+// // usage
+// (async () => {
+//   const myString = "hello world";
+//   const number = await runPythonScript('./generate_number.py', [myString]);
+//   console.log('Got number:', number);
+// })();

@@ -378,53 +378,53 @@ class Anilist {
 //3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 
-// (async() => {
-//     const results = await searchResults('Crest of Stars');
-//     const href = JSON.parse(results)[0].href;
-//     console.log("HREF:", href);
+(async() => {
+    const results = await searchResults('Crest of Stars');
+    const href = JSON.parse(results)[0].href;
+    console.log("HREF:", href);
 
-//     const details = await extractDetails(href);
-//     console.log("Details: ", details);
+    const details = await extractDetails(href);
+    console.log("Details: ", details);
  
-//     const episodes = await extractEpisodes(href);
-//     const firstEpisodeHref = JSON.parse(episodes)[5].href;
-//     console.log("EPISODE HREF:", firstEpisodeHref);
+    const episodes = await extractEpisodes(href);
+    const firstEpisodeHref = JSON.parse(episodes)[5].href;
+    console.log("EPISODE HREF:", firstEpisodeHref);
  
-//     const streamUrl = await extractStreamUrl(firstEpisodeHref);
-//     const parsed = JSON.parse(streamUrl);
-//     const streams = parsed.streams;
-//     const subtitles = parsed.subtitles;
+    const streamUrl = await extractStreamUrl(firstEpisodeHref);
+    const parsed = JSON.parse(streamUrl);
+    const streams = parsed.streams;
+    const subtitles = parsed.subtitles;
  
-//     console.log("\n===== STREAMS =====");
-//     streams.forEach(s => {
-//         const subUrl = s.subtitleUrl || subtitles || null;
-//         const refHeader = s.headers?.Referer || "https://animex.one";
-//         const originHeader = s.headers?.Origin || "https://animex.one";
-//         const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
+    console.log("\n===== STREAMS =====");
+    streams.forEach(s => {
+        const subUrl = s.subtitleUrl || subtitles || null;
+        const refHeader = s.headers?.Referer || "https://animex.one";
+        const originHeader = s.headers?.Origin || "https://animex.one";
+        const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
 
-//         console.log(`\n[${s.title}]`);
-//         console.log(`\n# 1. Download video:`);
-//         console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
-//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+        console.log(`\n[${s.title}]`);
+        console.log(`\n# 1. Download video:`);
+        console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
+        console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
 
-//         console.log(`\n# 2. Download subtitles separately:`);
-//         if (s.subtitleUrl) {
-//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-//         } else {
-//             console.log(`# No subtitles available for this stream`);
-//         }
+        console.log(`\n# 2. Download subtitles separately:`);
+        if (s.subtitleUrl) {
+            console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+        } else {
+            console.log(`# No subtitles available for this stream`);
+        }
 
-//         console.log(`\n# 3. Merge video + subtitles:`);
-//         if (subUrl) {
-//             console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-//         } else {
-//             console.log(`# Skip merge — no subs`);
-//         }
-//     });
+        console.log(`\n# 3. Merge video + subtitles:`);
+        if (subUrl) {
+            console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+        } else {
+            console.log(`# Skip merge — no subs`);
+        }
+    });
  
-//     console.log("\n===== SUBTITLES =====");
-//     console.log(subtitles || "No subtitles found");
-// })();
+    console.log("\n===== SUBTITLES =====");
+    console.log(subtitles || "No subtitles found");
+})();
 
 // ***** LOCAL TESTING
 
@@ -696,10 +696,8 @@ async function extractStreamUrl(url) {
         const match = url.match(/anime\/(\d+)\/([^\/]+)\/(\d+)/); //captures anime/290/crest-of-the-stars-vee16/6
         if (!match) throw new Error('Invalid URL format');
 
-        const id = match[1]; //290
         const slug = match[2]; //crest-of-the-stars-vee16
         const episodeNumber = match[3]; //6
-        const name = slug.replace(/-[^-]+$/, ''); // crest-of-the-stars
 
         console.log("[extractStreamUrl] Slug: " + slug + " Episode: " + episodeNumber);
 
@@ -779,36 +777,25 @@ async function extractStreamUrl(url) {
         }
 
         // 1. Fetch available servers
-
-        //https://animex.one/watch/crest-of-the-stars-290-episode-6
-        const domainUrl = `https://animex.one/watch/${name}-${id}-episode-${episodeNumber}`;
-
+                
         //https://pp.animex.one/rest/api/servers?id=crest-of-the-stars-vee16&epNum=6
         const serversUrl = `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}`;
         console.log("[extractStreamUrl] Fetching servers: " + serversUrl);
-
-
-        console.log("[extractStreamUrl] Domain URL: " + domainUrl);
         const headers = {
             "Host": "pp.animex.one", 
             "Origin": "https://animex.one", 
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate",
+            "Cookie": ""
+        };
+
+        const serversResp = await animexFetch(serversUrl, headers);
+
+        if (!serversResp || serversResp.status !== 200) {
+            console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
+            return JSON.stringify({ streams: [], subtitles: null });
         }
-        const serversRsp = await runPythonScript('./cookie_generator.py', [domainUrl, serversUrl, JSON.stringify(headers)]);
-        const serversData = JSON.parse(serversRsp);
-        console.log(serversData);
 
-        // const serversResp = await animexFetch(serversUrl, headers);
-
-        // if (!serversResp || serversResp.status !== 200) {
-        //     console.error("[extractStreamUrl] Failed to fetch servers, status: " + serversResp?.status);
-        //     return JSON.stringify({ streams: [], subtitles: null });
-        // }
-
-        // const serversData = await serversResp.json();
+        const serversData = await serversResp.json();
         const subProviders = serversData.subProviders || [];
         const dubProviders = serversData.dubProviders || [];
 
@@ -821,27 +808,13 @@ async function extractStreamUrl(url) {
             const sourcesUrl = `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(slug)}&epNum=${episodeNumber}&type=${type}&providerId=${providerId}`;
             console.log("[extractStreamUrl] Fetching sources: " + sourcesUrl);
 
-
-            console.log("[extractStreamUrl] Domain URL: " + domainUrl);
-            const headers = {
-                "Host": "pp.animex.one", 
-                "Origin": "https://animex.one", 
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0", 
-                "Accept": "*/*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate",
+            const sourcesResp = await animexFetch(sourcesUrl);
+            if (!sourcesResp || sourcesResp.status !== 200) {
+                console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
+                return null;
             }
-            const sourcesResp = await runPythonScript('./cookie_generator.py', [domainUrl, sourcesUrl, JSON.stringify(headers)]);
-            const sourcesData = JSON.parse(sourcesResp);
-            console.log(sourcesData);
 
-            // const sourcesResp = await animexFetch(sourcesUrl);
-            // if (!sourcesResp || sourcesResp.status !== 200) {
-            //     console.error("[extractStreamUrl] Failed to fetch sources for " + providerId + ", status: " + sourcesResp?.status);
-            //     return null;
-            // }
-
-            // const sourcesData = await sourcesResp.json();
+            const sourcesData = await sourcesResp.json();
             if (!sourcesData.sources || sourcesData.sources.length === 0) {
                 console.warn("[extractStreamUrl] No sources for " + providerId);
                 return null;
@@ -875,7 +848,7 @@ async function extractStreamUrl(url) {
             const finalReferer = referer || "https://animex.one/";
             const finalOrigin  = origin  || finalReferer.match(/^(https?:\/\/[^\/]+)/)?.[1] || "https://animex.one";
 
-            headers = {
+            const headers = {
                 "Referer":    finalReferer, //https://megaplay.buzz/
                 "Origin":     finalOrigin, //https://animex.one
                 "User-Agent": userAgent,   //Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1
@@ -884,14 +857,14 @@ async function extractStreamUrl(url) {
             console.log("[extractStreamUrl] Final headers for " + providerId + ": " + JSON.stringify(headers));
 
             // Skip resolveStreamUrl for direct MP4 — never pre-fetch it
-            // const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
-            // const streamUrl = isDirectMp4
-            //     ? resolvedUrl
-            //     : await resolveStreamUrl(resolvedUrl, headers);
+            const isDirectMp4 = !resolvedUrl.includes('.m3u8') && !resolvedUrl.includes('.mpd');
+            const streamUrl = isDirectMp4
+                ? resolvedUrl
+                : await resolveStreamUrl(resolvedUrl, headers);
 
-            // if (isDirectMp4) {
-            //     console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
-            // }
+            if (isDirectMp4) {
+                console.log("[extractStreamUrl] Direct MP4 detected for " + providerId + ", skipping manifest fetch");
+            }
 
             // Use track kind to determine if subtitle exists — let the API decide,
             // not the provider name. If tracks exist and are captions/subtitles, use them.
@@ -1044,39 +1017,3 @@ async function fetchv2(url, headers = {}, method = "GET", body = null, redirect 
     }
 }
  
-const { spawn } = require('child_process');
-
-function runPythonScript(scriptPath, args = []) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('python', [scriptPath, ...args]);
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        return reject(new Error(`Python exited with code ${code}: ${stderr}`));
-      }
-
-      const result = stdout.trim();
-
-      if (!result) {
-        return reject(new Error(`Python script produced no output. stderr: ${stderr}`));
-      }
-
-      resolve(result);
-    });
-
-    proc.on('error', (err) => reject(err));
-  });
-}
-
-// // usage
-// (async () => {
-//   const myString = "hello world";
-//   const number = await runPythonScript('./generate_number.py', [myString]);
-//   console.log('Got number:', number);
-// })();
