@@ -375,167 +375,181 @@ class Anilist {
 
 
 
-// // ─── _amx_id bot-detection bypass ──────────────────────────────────────────
-// // The token is bound to (ip, ua) at issuance time, so this interceptor:
-// //   1. Pins ONE User-Agent for its entire lifetime and uses it on every
-// //      request — including the warm-up.
-// //   2. Warms up by hitting the human-facing watch page first (the page a
-// //      real browser would load before any /rest/api/* call), to receive
-// //      the `_amx_id` cookie under realistic conditions.
-// //   3. Stores and resends every cookie set by the server (not just
-// //      `_amx_id`) on subsequent requests to the same origin.
-// class AmxBotInterceptor {
-//     constructor(userAgent) {
-//         this.cookieStore = {};
-//         // Pin a single UA for the whole session since _amx_id embeds it.
-//         this.userAgent = userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0";
-//         this.warmedUp = false;
-//     }
+// ─── _amx_id bot-detection bypass ──────────────────────────────────────────
+// The token is bound to (ip, ua) at issuance time, so this interceptor:
+//   1. Pins ONE User-Agent for its entire lifetime and uses it on every
+//      request — including the warm-up.
+//   2. Warms up by hitting the human-facing watch page first (the page a
+//      real browser would load before any /rest/api/* call), to receive
+//      the `_amx_id` cookie under realistic conditions.
+//   3. Stores and resends every cookie set by the server (not just
+//      `_amx_id`) on subsequent requests to the same origin.
+class AmxBotInterceptor {
+    constructor(userAgent) {
+        this.cookieStore = {};
+        // Pin a single UA for the whole session since _amx_id embeds it.
+        this.userAgent = userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0";
+        this.warmedUp = false;
+    }
  
-//     // Call once per slug/episode session before hitting /rest/api/*.
-//     // domainUrl should be the human-facing watch page, e.g.
-//     // https://animex.one/watch/crest-of-the-stars-290-episode-6
-//     async warmUp(domainUrl) {
-//         if (this.warmedUp) return;
-//         console.log("[Amx] Warming up via watch page: " + domainUrl);
+    // Call once per slug/episode session before hitting /rest/api/*.
+    // domainUrl should be the human-facing watch page, e.g.
+    // https://animex.one/watch/crest-of-the-stars-290-episode-6
+    async warmUp(domainUrl) {
+        if (this.warmedUp) return;
+        console.log("[Amx] Warming up via watch page: " + domainUrl);
  
-//         const resp = await this.fetchWithCookies(domainUrl, {
-//             headers: {
-//                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-//                 "Accept-Language": "en-US,en;q=0.9",
-//             }
-//         });
+        const resp = await this.fetchWithCookies(domainUrl, {
+            headers: {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+        });
  
-//         if (resp && this.cookieStore["_amx_id"]) {
-//             console.log("[Amx] Warm-up succeeded, _amx_id acquired.");
-//         } else {
-//             console.log("[Amx] Warm-up did not yield an _amx_id cookie (status " + resp?.status + "). Continuing anyway — API calls may still be flagged.");
-//         }
+        if (resp && this.cookieStore["_amx_id"]) {
+            console.log("[Amx] Warm-up succeeded, _amx_id acquired.");
+        } else {
+            console.log("[Amx] Warm-up did not yield an _amx_id cookie (status " + resp?.status + "). Continuing anyway — API calls may still be flagged.");
+        }
  
-//         this.warmedUp = true;
-//     }
+        this.warmedUp = true;
+    }
  
-//     async fetchWithBypass(url, options = {}) {
-//         let response = await this.fetchWithCookies(url, options);
+    async fetchWithBypass(url, options = {}) {
+        let response = await this.fetchWithCookies(url, options);
  
-//         if (!this.looksBotBlocked(response)) {
-//             return response;
-//         }
+        if (!this.looksBotBlocked(response)) {
+            return response;
+        }
  
-//         console.log("[Amx] bot_detected on " + url + " — _amx_id missing/stale or IP+UA mismatch.");
+        console.log("[Amx] bot_detected on " + url + " — _amx_id missing/stale or IP+UA mismatch.");
  
-//         // If we never warmed up (or our cookie is stale), try a fresh
-//         // warm-up against this same origin and retry once.
-//         const originMatch = url.match(/^(https?:\/\/[^\/]+)/);
-//         if (originMatch) {
-//             await this.fetchWithCookies(originMatch[1] + "/", {});
-//             if (this.cookieStore["_amx_id"]) {
-//                 console.log("[Amx] Retrying original request with refreshed _amx_id...");
-//                 return this.fetchWithCookies(url, options);
-//             }
-//         }
+        // If we never warmed up (or our cookie is stale), try a fresh
+        // warm-up against this same origin and retry once.
+        const originMatch = url.match(/^(https?:\/\/[^\/]+)/);
+        if (originMatch) {
+            await this.fetchWithCookies(originMatch[1] + "/", {});
+            if (this.cookieStore["_amx_id"]) {
+                console.log("[Amx] Retrying original request with refreshed _amx_id...");
+                return this.fetchWithCookies(url, options);
+            }
+        }
  
-//         console.log("[Amx] Could not acquire a valid _amx_id — request will likely keep failing. " +
-//                      "If this persists even with a fresh cookie, the block is probably TLS/JA3 fingerprinting " +
-//                      "at the Cloudflare layer, which requires a server-side client with a real-browser TLS " +
-//                      "signature (e.g. curl-impersonate) rather than fetch().");
-//         return response;
-//     }
+        console.log("[Amx] Could not acquire a valid _amx_id — request will likely keep failing. " +
+                     "If this persists even with a fresh cookie, the block is probably TLS/JA3 fingerprinting " +
+                     "at the Cloudflare layer, which requires a server-side client with a real-browser TLS " +
+                     "signature (e.g. curl-impersonate) rather than fetch().");
+        return response;
+    }
  
-//     async fetchWithCookies(url, options) {
-//         const cookieHeader = this.getCookieHeader();
-//         const headers = { ...(options.headers || {}) };
-//         headers["User-Agent"] = this.userAgent; // always pinned, never overridden per-call
-//         if (cookieHeader) headers.Cookie = cookieHeader;
+    async fetchWithCookies(url, options) {
+        const cookieHeader = this.getCookieHeader();
+        const headers = { ...(options.headers || {}) };
+        headers["User-Agent"] = this.userAgent; // always pinned, never overridden per-call
+        if (cookieHeader) headers.Cookie = cookieHeader;
  
-//         const response = await animexFetch(url, { ...options, headers });
-//         if (!response) return response;
+        const response = await animexFetch(url, { ...options, headers });
+        if (!response) return response;
  
-//         try {
-//             const setCookie = response.headers?.["set-cookie"] || response.headers?.["Set-Cookie"];
-//             if (setCookie) this.storeCookies(setCookie);
-//         } catch (e) {}
+        try {
+            const setCookie = response.headers?.["set-cookie"] || response.headers?.["Set-Cookie"];
+            if (setCookie) this.storeCookies(setCookie);
+        } catch (e) {}
  
-//         return response;
-//     }
+        return response;
+    }
  
-//     looksBotBlocked(response) {
-//         if (!response) return true;
-//         if (response.status !== 403) return false;
-//         const body = response._data || "";
-//         // Specifically the origin app's bot_detected error, not a generic 403.
-//         return body.includes('bot_detected');
-//     }
+    looksBotBlocked(response) {
+        if (!response) return true;
+        if (response.status !== 403) return false;
+        const body = response._data || "";
+        // Specifically the origin app's bot_detected error, not a generic 403.
+        return body.includes('bot_detected');
+    }
  
-//     storeCookies(setCookieString) {
-//         const cookies = Array.isArray(setCookieString) ? setCookieString : [setCookieString];
-//         cookies.forEach(c => {
-//             const [kv] = c.split(";");
-//             const [key, value] = kv.split("=");
-//             if (key) this.cookieStore[key.trim()] = value?.trim() || "";
-//         });
-//     }
+    storeCookies(setCookieString) {
+        const cookies = Array.isArray(setCookieString) ? setCookieString : [setCookieString];
+        cookies.forEach(c => {
+            const [kv] = c.split(";");
+            const [key, value] = kv.split("=");
+            if (key) this.cookieStore[key.trim()] = value?.trim() || "";
+        });
+    }
  
-//     getCookieHeader() {
-//         return Object.entries(this.cookieStore)
-//             .map(([k, v]) => `${k}=${v}`)
-//             .join("; ");
-//     }
-// }
+    getCookieHeader() {
+        return Object.entries(this.cookieStore)
+            .map(([k, v]) => `${k}=${v}`)
+            .join("; ");
+    }
+}
+
+
+
+
 
 function sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-// ─── Rate‑limiter for all animex.one requests ───
-// Strategy: burst optimistically up to a generous per‑minute ceiling, and only
-// slow down REACTIVELY when the server actually returns 429 (see below). The
-// ceiling is just a safety cap against runaway loops — the real protection is
-// the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
-// ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
-// several episodes per minute.
-const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
-const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
-const ANIMEX_MAX_429_RETRIES = 3;
-let animexRequestTimes = [];
-let animexAdmission = Promise.resolve();
-
-async function animexFetch(url, options = {}, attempt = 0) {
-    // Serialize only the admission decision so parallel callers don't grab the
-    // same slot; the actual network requests still run concurrently.
-    const ticket = animexAdmission.then(() => animexReserveSlot());
-    animexAdmission = ticket.catch(() => {});
-    await ticket;
-
-    const response = await soraFetch(url, options);
-
-    // Reactive backoff: respect the server's own throttle if (and only if) it
-    // actually pushes back, instead of crawling preemptively.
-    if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
-        const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
-        const waitMs = retryAfter * 1000 + 250;
-        console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
-        await sleep(waitMs);
-        return animexFetch(url, options, attempt + 1);
-    }
-
-    return response;
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function animexReserveSlot() {
-    const now = Date.now();
-    // Forget timestamps that have aged out of the rolling window.
-    animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
-
-    if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
-        const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
-        console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
-        await sleep(waitTime);
-        return animexReserveSlot();
-    }
-
-    animexRequestTimes.push(Date.now());
+async function animexFetch(url, options = {}) {
+    return soraFetch(url, options);
 }
+
+
+
+// function sleep(ms) {
+//         return new Promise((resolve) => setTimeout(resolve, ms));
+//     }
+
+// // ─── Rate‑limiter for all animex.one requests ───
+// // Strategy: burst optimistically up to a generous per‑minute ceiling, and only
+// // slow down REACTIVELY when the server actually returns 429 (see below). The
+// // ceiling is just a safety cap against runaway loops — the real protection is
+// // the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
+// // ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
+// // several episodes per minute.
+// const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
+// const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
+// const ANIMEX_MAX_429_RETRIES = 3;
+// let animexRequestTimes = [];
+// let animexAdmission = Promise.resolve();
+
+// async function animexFetch(url, options = {}, attempt = 0) {
+//     // Serialize only the admission decision so parallel callers don't grab the
+//     // same slot; the actual network requests still run concurrently.
+//     const ticket = animexAdmission.then(() => animexReserveSlot());
+//     animexAdmission = ticket.catch(() => {});
+//     await ticket;
+
+//     const response = await soraFetch(url, options);
+
+//     // Reactive backoff: respect the server's own throttle if (and only if) it
+//     // actually pushes back, instead of crawling preemptively.
+//     if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
+//         const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
+//         const waitMs = retryAfter * 1000 + 250;
+//         console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
+//         await sleep(waitMs);
+//         return animexFetch(url, options, attempt + 1);
+//     }
+
+//     return response;
+// }
+
+// async function animexReserveSlot() {
+//     const now = Date.now();
+//     // Forget timestamps that have aged out of the rolling window.
+//     animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
+
+//     if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
+//         const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
+//         console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
+//         await sleep(waitTime);
+//         return animexReserveSlot();
+//     }
+
+//     animexRequestTimes.push(Date.now());
+// }
 
 
 
