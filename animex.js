@@ -1111,64 +1111,64 @@ async function soraFetch(url, options = { headers: {}, method: 'GET', body: null
 }
 
 
-async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
-    const processedBody = (method !== "GET" && body && typeof body === 'object') 
-        ? JSON.stringify(body)
-        : (method !== "GET" ? body : null); //GET request should not have a body
+// async function fetchv2(url, headers = {}, method = "GET", body = null, redirect = true, encoding = "utf-8") {
+//     const processedBody = (method !== "GET" && body && typeof body === 'object') 
+//         ? JSON.stringify(body)
+//         : (method !== "GET" ? body : null); //GET request should not have a body
 
-    const options = {
-        method,
-        headers,
-        body: processedBody,
-        redirect: redirect ? 'follow' : 'manual', 
-		//follow: atuomatically follows HTTP redirects
-		//manual: don't follow them, you'll handle it
-    };
+//     const options = {
+//         method,
+//         headers,
+//         body: processedBody,
+//         redirect: redirect ? 'follow' : 'manual', 
+// 		//follow: atuomatically follows HTTP redirects
+// 		//manual: don't follow them, you'll handle it
+//     };
 
-    try {
-        const response = await fetch(url, options);
-		//sends the HTTP request
-		//waits for the fetch() promise to resolve
-		//contains metadata about the HTTP response
+//     try {
+//         const response = await fetch(url, options);
+// 		//sends the HTTP request
+// 		//waits for the fetch() promise to resolve
+// 		//contains metadata about the HTTP response
 
-        const rawBuffer = await response.arrayBuffer();
-		//reads the response body as binary data
-		//useful when the response is not plain text (like files, images, etc)
+//         const rawBuffer = await response.arrayBuffer();
+// 		//reads the response body as binary data
+// 		//useful when the response is not plain text (like files, images, etc)
 
-        const decoder = new TextDecoder(encoding || "utf-8");
-		//converts an ArrayBuffer string using specified encoding 
-		//if no encoding is specified it will use "utf-8"
+//         const decoder = new TextDecoder(encoding || "utf-8");
+// 		//converts an ArrayBuffer string using specified encoding 
+// 		//if no encoding is specified it will use "utf-8"
 
-        const decodedText = decoder.decode(rawBuffer);
-		//raw response body text
-		//Example: '{"success":true,"data":[1,2,3]}'
+//         const decodedText = decoder.decode(rawBuffer);
+// 		//raw response body text
+// 		//Example: '{"success":true,"data":[1,2,3]}'
 
-        const result = {
-            headers: Object.fromEntries(response.headers.entries()),
-			//response.headers.entries() gives an iterator of key-value pairs
-			//Object.fromEntries converts it to a plain object
-			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
+//         const result = {
+//             headers: Object.fromEntries(response.headers.entries()),
+// 			//response.headers.entries() gives an iterator of key-value pairs
+// 			//Object.fromEntries converts it to a plain object
+// 			// E.g., [["content-type", "application/json"]] → { "content-type": "application/json" }
 
-            status: response.status,
-			//HTTP status code
-            _data: decodedText,
-            text: function () {
-                return Promise.resolve(this._data);
-            },
-			//returns a promise that resolves to a string
+//             status: response.status,
+// 			//HTTP status code
+//             _data: decodedText,
+//             text: function () {
+//                 return Promise.resolve(this._data);
+//             },
+// 			//returns a promise that resolves to a string
 
-            json: function () {
-                try {
-                    return Promise.resolve(JSON.parse(this._data));
-                } catch (e) {
-                    return Promise.reject("JSON parse error: " + e.message);
-                }
-            }
-        };
+//             json: function () {
+//                 try {
+//                     return Promise.resolve(JSON.parse(this._data));
+//                 } catch (e) {
+//                     return Promise.reject("JSON parse error: " + e.message);
+//                 }
+//             }
+//         };
 
-        return result;
+//         return result;
 
-    } catch (err) {
-        return Promise.reject(err.message || "Unknown error");
-    }
-}
+//     } catch (err) {
+//         return Promise.reject(err.message || "Unknown error");
+//     }
+// }
