@@ -431,15 +431,24 @@ class AmxBotInterceptor {
  
         // If we never warmed up (or our cookie is stale), try a fresh
         // warm-up against this same origin and retry once.
-        const originMatch = url.match(/^(https?:\/\/[^\/]+)/);
-        // console.log(originMatch);
-        if (originMatch) {
-            await this.fetchWithCookies(originMatch[1] + "/", {});
-            if (this.cookieStore["_amx_id"]) {
-                console.log("[Amx] Retrying original request with refreshed _amx_id...");
-                return this.fetchWithCookies(url, options);
-            }
+        // const originMatch = url.match(/^(https?:\/\/[^\/]+)/);
+        // // console.log(originMatch);
+        // if (originMatch) {
+        //     await this.fetchWithCookies(originMatch[1] + "/", {});
+        //     if (this.cookieStore["_amx_id"]) {
+        //         console.log("[Amx] Retrying original request with refreshed _amx_id...");
+        //         return this.fetchWithCookies(url, options);
+        //     }
+        // }
+ 
+
+        await this.fetchWithCookies(url, {});
+        if (this.cookieStore["_amx_id"]) {
+            console.log("[Amx] Retrying original request with refreshed _amx_id...");
+            return this.fetchWithCookies(url, options);
         }
+    
+ 
  
         console.log("[Amx] Could not acquire a valid _amx_id — request will likely keep failing. " +
                      "If this persists even with a fresh cookie, the block is probably TLS/JA3 fingerprinting " +
@@ -501,69 +510,69 @@ class AmxBotInterceptor {
 
 
 
-// function sleep(ms) {
-//     return new Promise((resolve) => setTimeout(resolve, ms));
-// }
-
-// async function animexFetch(url, options = {}) {
-//     return soraFetch(url, options);
-// }
-
-
-
 function sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ─── Rate‑limiter for all animex.one requests ───
-// Strategy: burst optimistically up to a generous per‑minute ceiling, and only
-// slow down REACTIVELY when the server actually returns 429 (see below). The
-// ceiling is just a safety cap against runaway loops — the real protection is
-// the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
-// ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
-// several episodes per minute.
-const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
-const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
-const ANIMEX_MAX_429_RETRIES = 3;      //three retries
-let animexRequestTimes = [];
-let animexAdmission = Promise.resolve();
-
-async function animexFetch(url, options = {}, attempt = 0) {
-    // Serialize only the admission decision so parallel callers don't grab the
-    // same slot; the actual network requests still run concurrently.
-    const ticket = animexAdmission.then(() => animexReserveSlot());
-    animexAdmission = ticket.catch(() => {});
-    await ticket;
-
-    const response = await soraFetch(url, options);
-
-    // Reactive backoff: respect the server's own throttle if (and only if) it
-    // actually pushes back, instead of crawling preemptively.
-    if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
-        const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
-        const waitMs = retryAfter * 1000 + 250;
-        console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
-        await sleep(waitMs);
-        return animexFetch(url, options, attempt + 1);
-    }
-
-    return response;
+async function animexFetch(url, options = {}) {
+    return soraFetch(url, options);
 }
 
-async function animexReserveSlot() {
-    const now = Date.now();
-    // Forget timestamps that have aged out of the rolling window.
-    animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
 
-    if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
-        const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
-        console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
-        await sleep(waitTime);
-        return animexReserveSlot();
-    }
 
-    animexRequestTimes.push(Date.now());
-}
+// function sleep(ms) {
+//         return new Promise((resolve) => setTimeout(resolve, ms));
+// }
+
+// // ─── Rate‑limiter for all animex.one requests ───
+// // Strategy: burst optimistically up to a generous per‑minute ceiling, and only
+// // slow down REACTIVELY when the server actually returns 429 (see below). The
+// // ceiling is just a safety cap against runaway loops — the real protection is
+// // the Retry‑After backoff, not a tiny preemptive budget. One episode load costs
+// // ~1 (servers) + N (providers) requests, so the ceiling must comfortably fit
+// // several episodes per minute.
+// const ANIMEX_MAX_REQUESTS = 60;       // ceiling per window (≈1 req/s average)
+// const ANIMEX_WINDOW_MS = 60000;        // rolling 60s window
+// const ANIMEX_MAX_429_RETRIES = 3;      //three retries
+// let animexRequestTimes = [];
+// let animexAdmission = Promise.resolve();
+
+// async function animexFetch(url, options = {}, attempt = 0) {
+//     // Serialize only the admission decision so parallel callers don't grab the
+//     // same slot; the actual network requests still run concurrently.
+//     const ticket = animexAdmission.then(() => animexReserveSlot());
+//     animexAdmission = ticket.catch(() => {});
+//     await ticket;
+
+//     const response = await soraFetch(url, options);
+
+//     // Reactive backoff: respect the server's own throttle if (and only if) it
+//     // actually pushes back, instead of crawling preemptively.
+//     if (response && response.status === 429 && attempt < ANIMEX_MAX_429_RETRIES) {
+//         const retryAfter = parseInt(response.headers?.get?.('Retry-After')) || 5;
+//         const waitMs = retryAfter * 1000 + 250;
+//         console.log("[RateLimit] 429 from server, backing off " + waitMs + "ms (attempt " + (attempt + 1) + ").");
+//         await sleep(waitMs);
+//         return animexFetch(url, options, attempt + 1);
+//     }
+
+//     return response;
+// }
+
+// async function animexReserveSlot() {
+//     const now = Date.now();
+//     // Forget timestamps that have aged out of the rolling window.
+//     animexRequestTimes = animexRequestTimes.filter(t => now - t < ANIMEX_WINDOW_MS);
+
+//     if (animexRequestTimes.length >= ANIMEX_MAX_REQUESTS) {
+//         const waitTime = ANIMEX_WINDOW_MS - (now - animexRequestTimes[0]) + 50;
+//         console.log("[RateLimit] Window full (" + ANIMEX_MAX_REQUESTS + "/" + (ANIMEX_WINDOW_MS / 1000) + "s), waiting " + waitTime + "ms.");
+//         await sleep(waitTime);
+//         return animexReserveSlot();
+//     }
+
+//     animexRequestTimes.push(Date.now());
+// }
 
 
 
@@ -575,7 +584,7 @@ async function animexReserveSlot() {
 //curl -L -H "Referer: https://animex.one" -H "Origin: https://animex.one" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0" --output "output.mp4" "https://mp4.24stream.xyz/storage/media6/videos/bndqfD6H7DyHeumFL/sub/6?Authorization=3_20260601165107_35979d636e3fab19a98113c2_30fde646501cf62e3590b08b944947acaf1a8b2e_000_20260604165107_0041_dnld"
 
 // (async() => {
-//     const results = await searchResults('The Melancholy of Haruhi Suzumiya (2009)');
+//     const results = await searchResults('Erased');
 //     const href = JSON.parse(results)[0].href;
 //     console.log("HREF:", href);
 
@@ -590,33 +599,36 @@ async function animexReserveSlot() {
 //     const parsed = JSON.parse(streamUrl);
 //     const streams = parsed.streams;
 //     const subtitles = parsed.subtitles;
- 
-//     console.log("\n===== STREAMS =====");
-//     streams.forEach(s => {
-//         const subUrl = s.subtitleUrl || subtitles || null;
-//         const refHeader = s.headers?.Referer || "https://animex.one";
-//         const originHeader = s.headers?.Origin || "https://animex.one";
-//         const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
 
-//         console.log(`\n[${s.title}]`);
-//         console.log(`\n# 1. Download video:`);
-//         // console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
-//         console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+//     console.log(streams)
 
-//         console.log(`\n# 2. Download subtitles separately:`);
-//         if (s.subtitleUrl) {
-//             console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
-//         } else {
-//             console.log(`# No subtitles available for this stream`);
-//         }
 
-//         console.log(`\n# 3. Merge video + subtitles:`);
-//         if (subUrl) {
-//             console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
-//         } else {
-//             console.log(`# Skip merge — no subs`);
-//         }
-//     });
+//     // console.log("\n===== STREAMS =====");
+//     // streams.forEach(s => {
+//     //     const subUrl = s.subtitleUrl || subtitles || null;
+//     //     const refHeader = s.headers?.Referer || "https://animex.one";
+//     //     const originHeader = s.headers?.Origin || "https://animex.one";
+//     //     const uaHeader = s.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:151.0) Gecko/20100101 Firefox/151.0";
+
+//     //     console.log(`\n[${s.title}]`);
+//     //     console.log(`\n# 1. Download video:`);
+//     //     // console.log(`curl -L -H "Referer: ${refHeader}" -H "Origin: ${originHeader}" -H "User-Agent: ${uaHeader}" --output "output.mp4" "${s.streamUrl}"`);
+//     //     console.log(`python -m yt_dlp --add-header "Referer: ${refHeader}" --add-header "Origin:${originHeader}" --add-header "User-Agent:${uaHeader}" --no-check-certificate --extractor-args "generic:impersonate" --downloader curl -o "output.mp4" "${s.streamUrl}"`);
+
+//     //     console.log(`\n# 2. Download subtitles separately:`);
+//     //     if (s.subtitleUrl) {
+//     //         console.log(`python -m yt_dlp "${subUrl}" -o "subs.vtt"`);
+//     //     } else {
+//     //         console.log(`# No subtitles available for this stream`);
+//     //     }
+
+//     //     console.log(`\n# 3. Merge video + subtitles:`);
+//     //     if (subUrl) {
+//     //         console.log(`ffmpeg -i "output.mp4" -i "subs.vtt" -c copy -c:s mov_text -metadata:s:s:0 language=eng output_with_subs.mp4`);
+//     //     } else {
+//     //         console.log(`# Skip merge — no subs`);
+//     //     }
+//     // });
  
 //     console.log("\n===== SUBTITLES =====");
 //     console.log(subtitles || "No subtitles found");
